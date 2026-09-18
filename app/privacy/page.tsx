@@ -2,7 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { PublicFooter } from '@/components/public/PublicFooter';
-import { defaultPrivacy, getPublishedContent, normalizeLegal } from '@/lib/public-content';
+import { defaultPrivacy, normalizeLegal } from '@/lib/public-content';
+import { getPublishedContent } from '@/lib/public-content-server';
 
 export const metadata: Metadata = { title: 'TABLELY Privacy Policy' };
 

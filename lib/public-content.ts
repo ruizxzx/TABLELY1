@@ -1,5 +1,3 @@
-import { getSupabaseServerClient } from '@/lib/supabase-server';
-
 export type ContactContent = {
   eyebrow: string;
   title: string;
@@ -103,18 +101,6 @@ export const defaultTerms: LegalContent = {
 
 const safeString = (value: unknown, fallback: string) => typeof value === 'string' && value.trim() ? value : fallback;
 const safeStringArray = (value: unknown, fallback: string[]) => Array.isArray(value) ? value.map(String).map(x => x.trim()).filter(Boolean) : fallback;
-
-export async function getPublishedContent<T>(slug: 'contact'|'vision'|'privacy'|'terms', fallback: T): Promise<T> {
-  try {
-    const client = await getSupabaseServerClient();
-    if (!client) return fallback;
-    const { data, error } = await client.rpc('get_public_content_page', { p_slug: slug });
-    if (error || !data || typeof data !== 'object' || !('content' in data)) return fallback;
-    return data.content as T;
-  } catch {
-    return fallback;
-  }
-}
 
 export function normalizeContact(input: Partial<ContactContent>): ContactContent {
   return {

@@ -2,7 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import { PublicFooter } from '@/components/public/PublicFooter';
-import { defaultVision, getPublishedContent, normalizeVision } from '@/lib/public-content';
+import { defaultVision, normalizeVision } from '@/lib/public-content';
+import { getPublishedContent } from '@/lib/public-content-server';
 
 export const metadata: Metadata = { title: 'TABLELY — My Vision', description: 'The vision behind TABLELY.' };
 

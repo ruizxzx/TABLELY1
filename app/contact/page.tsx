@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { ArrowLeft, Mail, MapPin, Clock3 } from 'lucide-react';
 import { ContactForm } from '@/components/public/ContactForm';
 import { PublicFooter } from '@/components/public/PublicFooter';
-import { defaultContact, getPublishedContent, normalizeContact } from '@/lib/public-content';
+import { defaultContact, normalizeContact } from '@/lib/public-content';
+import { getPublishedContent } from '@/lib/public-content-server';
 
 export const metadata: Metadata = { title: 'TABLELY Contact', description: 'Contact TABLELY about your restaurant setup.' };
 

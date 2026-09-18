@@ -2,7 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { PublicFooter } from '@/components/public/PublicFooter';
-import { defaultTerms, getPublishedContent, normalizeLegal } from '@/lib/public-content';
+import { defaultTerms, normalizeLegal } from '@/lib/public-content';
+import { getPublishedContent } from '@/lib/public-content-server';
 
 export const metadata: Metadata = { title: 'TABLELY Terms and Conditions' };
 
