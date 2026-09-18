@@ -6,7 +6,6 @@ import { StudioShell } from '@/components/StudioShell';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 import { getCurrentRestaurantContext } from '@/lib/restaurant-context';
 
-declare global { interface Window { Razorpay?: new (options: Record<string, unknown>) => { open: () => void }; } }
 
 type Plan = { id: string; name: string; description: string | null; price_monthly: number; price_annual: number; currency: string; billing_interval: string; trial_days: number; active: boolean; features: Record<string, boolean | number | null>; max_staff: number | null; max_branches: number | null; max_tables: number | null; max_menu_items: number | null; max_monthly_orders: number | null; has_monthly?: boolean; has_annual?: boolean };
 type Subscription = { id: string; organization_id: string; plan_id: string; status: string; price_monthly_snapshot: number | null; price_annual_snapshot?: number | null; selected_price_snapshot?: number | null; currency: string; billing_interval: string; trial_started_at: string | null; trial_ends_at: string | null; current_period_start: string | null; current_period_end: string | null; provider_subscription_id: string | null; pending_plan_id: string | null; pending_provider_plan_id: string | null; pending_billing_interval: string | null; cancellation_requested_at: string | null };

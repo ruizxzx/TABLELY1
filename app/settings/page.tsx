@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { CreditCard, ReceiptText, LogOut, ShieldCheck, Palette, Globe2, Shield, BadgeCheck, Bell, Tag, MessageSquare } from 'lucide-react';
+import { CreditCard, ReceiptText, LogOut, ShieldCheck, Palette, Globe2, Shield, BadgeCheck, Bell, Tag, MessageSquare, AlertTriangle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { StudioShell } from '@/components/StudioShell';
@@ -55,5 +55,6 @@ export default function SettingsPage(){
    {owner?<><Link className="surface-card settings-tile" href="/settings/domain"><Globe2 size={20}/><div><strong>Custom domain</strong><span>Configure and verify a Pro customer-facing hostname.</span></div></Link><Link className="surface-card settings-tile" href="/staff/permissions"><Shield size={20}/><div><strong>Advanced permissions</strong><span>Fine-grained access controls for staff.</span></div></Link><Link className="surface-card settings-tile" href="/settings/notifications"><Bell size={20}/><div><strong>Notification preferences</strong><span>Choose which branches can notify the Owner account.</span></div></Link></>:null}
    {can('SUBSCRIPTION_MANAGEMENT')?<Link className="surface-card settings-tile" href="/dashboard/subscription"><BadgeCheck size={20}/><div><strong>Subscription</strong><span>View the current Tablely plan, billing history and subscription status.</span></div></Link>:null}
    <section className="surface-card settings-tile"><ShieldCheck size={20}/><div><strong>Account security</strong><span>Sign out of this Tablely session.</span><button className="button button-light" type="button" onClick={()=>void signOut()} disabled={busy}><LogOut size={15}/>{busy?'Signing out…':'Sign out'}</button>{error?<small className="notice notice-error">{error}</small>:null}</div></section>
+   {owner?<Link className="surface-card settings-tile danger-zone-tile" href="/settings/danger"><AlertTriangle size={20}/><div><strong>Danger zone</strong><span>Permanently delete this restaurant and all of its data.</span></div></Link>:null}
  </div>{feedbackOpen?<FeedbackForm source="RESTAURANT" onClose={()=>setFeedbackOpen(false)}/>:null}</StudioShell>;
 }

@@ -50,7 +50,7 @@ export function RealtimeNotificationCenter(){
       if(!scope||!active)return;
       scopeRef.current=scope; staffRef.current=scope.staffId;
       if(scope.branchIds.length===0){setRows([]);setUnread(0);return;}
-      const [{data,error},{count,countError}]=await Promise.all([
+      const [{data,error},{count,error:countError}]=await Promise.all([
         s.from('notifications').select('*').eq('recipient_staff_id',scope.staffId).in('branch_id',scope.branchIds).order('created_at',{ascending:false}).limit(50),
         s.from('notifications').select('id',{count:'exact',head:true}).eq('recipient_staff_id',scope.staffId).in('branch_id',scope.branchIds).is('read_at',null)
       ]);

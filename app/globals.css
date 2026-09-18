@@ -83,6 +83,9 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 .button-dark { background: var(--green); color: #fff; }
 .button-danger { border-color: #e2aaa4; background: #b9483c; color: #fff; box-shadow: 0 6px 14px rgba(185,72,60,.16); }
 .button-danger:hover { background: #9f3c32; }
+.danger-zone-tile { border-color: #e2aaa4; }
+.danger-zone-tile strong { color: #b9483c; }
+.danger-zone-card { border-color: #e2aaa4; }
 .button-full { width: 100%; }
 .button.compact { min-height: 35px; padding: 0 11px; font-size: 12px; }
 .button-row { display: flex; gap: 9px; flex-wrap: wrap; }

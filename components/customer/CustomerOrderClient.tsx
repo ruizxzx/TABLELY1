@@ -7,11 +7,6 @@ import { CustomerFrame } from './CustomerLayout';
 import { clearCart, formatMoney, getCustomerOrderChannel, getPublicOrder, getPublicTableContext, retryPublicOrder, type PublicOrderRow } from '@/lib/customer';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 
-declare global {
-  interface Window {
-    Razorpay?: new (options: Record<string, unknown>) => { open: () => void; on: (event: string, handler: (payload: unknown) => void) => void };
-  }
-}
 
 const steps = ['NEW', 'ACCEPTED', 'PREPARING', 'READY', 'SERVED', 'COMPLETED'];
 

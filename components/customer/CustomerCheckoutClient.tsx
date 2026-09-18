@@ -7,7 +7,6 @@ import { CustomerFrame, CustomerBack } from './CustomerLayout';
 import { createPublicOrder, createPublicPaymentAttempt, createPayLaterOrder, openPayLaterSession, clearCart, getPublicMenu, getPublicTableContext, getPublicOrderingOptions, previewPublicCheckout, type CartItem, type PublicCheckoutPreview, readCart, readCouponCode, saveCouponCode, clearCouponCode, formatMoney } from '@/lib/customer';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 
-declare global { interface Window { Razorpay?: new (options: Record<string, unknown>) => { open: () => void; on: (event: string, handler: (payload: unknown) => void) => void }; } }
 function checkoutKey(tableCode: string) { if (typeof window === 'undefined') return `tablely-checkout:${tableCode}`; const key=`tablely-checkout:${tableCode}`; let current=window.sessionStorage.getItem(key); if(!current){current=crypto.randomUUID();window.sessionStorage.setItem(key,current)} return current; }
 async function loadRazorpayScript(){if(typeof window==='undefined')return false;if(window.Razorpay)return true;await new Promise<void>((resolve,reject)=>{const script=document.createElement('script');script.src='https://checkout.razorpay.com/v1/checkout.js';script.async=true;script.onload=()=>resolve();script.onerror=()=>reject(new Error('Could not load Razorpay Checkout. Check your internet connection.'));document.body.appendChild(script)});return Boolean(window.Razorpay)}
 

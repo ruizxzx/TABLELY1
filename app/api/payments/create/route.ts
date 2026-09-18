@@ -56,7 +56,7 @@ export async function POST(request:Request){
       return NextResponse.json({razorpayOrderId,amount:Math.round(total*100),currency:'INR',keyId:keys.keyId});
     }
 
-    const rzp=await createRazorpayOrder({amountInPaise:Math.round(total*100),receipt:`tablely-pay-${paymentAttemptId??'legacy'}`,notes:paymentAttemptId?{tablely_payment_attempt_id:paymentAttemptId}:{tablely_legacy_payment:true}},{keyId:keys.keyId,keySecret:keys.secret});
+    const rzp=await createRazorpayOrder({amountInPaise:Math.round(total*100),receipt:`tablely-pay-${paymentAttemptId??'legacy'}`,notes:paymentAttemptId?{tablely_payment_attempt_id:paymentAttemptId}:{tablely_legacy_payment:'true'}},{keyId:keys.keyId,keySecret:keys.secret});
     if(paymentAttemptId){
       const{data:set,error:setErr}=await admin.rpc('set_payment_attempt_razorpay_order',{p_payment_attempt_id:paymentAttemptId,p_attempt_token:parsed.data.attemptToken,p_razorpay_order_id:rzp.id});
       if(setErr||set!==true)return NextResponse.json({error:'Payment session expired. Please place a new order.'},{status:409});

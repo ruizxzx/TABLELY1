@@ -161,6 +161,7 @@ export type PublicMenuItem = {
   preparation_minutes: number | null;
   dietary_tags: string[] | null;
   allergens: string[] | null;
+  addons: Array<{ name: string; price: number }> | null;
   variants: Array<{ id:string; name:string; description:string|null; price_delta:number; is_default:boolean; is_available:boolean; sort_order:number; translations:Array<{language_code:string;name:string;description:string|null}> }> | null;
   modifier_groups: Array<{ id:string; name:string; description:string|null; translations:Array<{language_code:string;name:string;description:string|null}>; is_required:boolean; selection_mode:'SINGLE'|'MULTI'; min_select:number; max_select:number; sort_order:number; modifiers:Array<{id:string;name:string;description:string|null;price_delta:number;is_available:boolean;sort_order:number;translations:Array<{language_code:string;name:string;description:string|null}>}> }> | null;
   category_translations: Array<{language_code:string;name:string}> | null;
