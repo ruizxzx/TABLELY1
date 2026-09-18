@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getSupabaseServerClient } from '@/lib/supabase-server';
 import { getSupabaseAdminClient } from '@/lib/supabase-admin';
-import { createTablelySubscription, fetchTablelySubscription, cancelTablelySubscription, getTablelyBillingConfigStatus } from '@/lib/tablely-billing';
+import { createTablelySubscription, fetchTablelyPlan, fetchTablelySubscription, cancelTablelySubscription, getTablelyBillingConfigStatus } from '@/lib/tablely-billing';
 const schema=z.object({planId:z.enum(['STARTER','GROWTH','PRO']),interval:z.enum(['month','year']).default('month')});
 export async function POST(request:Request){
   const parsed=schema.safeParse(await request.json().catch(()=>null));
@@ -19,6 +19,15 @@ export async function POST(request:Request){
   const admin=getSupabaseAdminClient();
   if(!admin)return NextResponse.json({error:'Server database configuration is incomplete.'},{status:503});
   try{
+    const providerPlan=await fetchTablelyPlan(context.provider_plan_id as string);
+    const expectedAmount=Number((context.price as number|undefined)??0)*100;
+    const expectedPeriod=parsed.data.interval==='year'?'yearly':'monthly';
+    const providerAmount=Number(providerPlan.item?.amount??0);
+    const providerPeriod=String(providerPlan.period??'').toLowerCase();
+    if(providerPeriod!==expectedPeriod||providerAmount!==Math.round(expectedAmount)){
+      console.error('subscriptions/create: provider plan mismatch',{planId:parsed.data.planId,interval:parsed.data.interval,providerPlanId:context.provider_plan_id,expectedAmount,providerAmount,expectedPeriod,providerPeriod});
+      return NextResponse.json({error:'Tablely billing configuration is inconsistent. Please ask a platform administrator to re-provision this billing plan.'},{status:503});
+    }
     const existingProviderId=context.provider_subscription_id as string|null;
     if(existingProviderId){
       const provider=await fetchTablelySubscription(existingProviderId);
@@ -31,5 +40,13 @@ export async function POST(request:Request){
       return NextResponse.json({error:recordError.message},{status:500});
     }
     return NextResponse.json({providerSubscriptionId:created.id,status:created.status??'created',keyId:billing.publicKey,interval:parsed.data.interval});
-  }catch(error:unknown){return NextResponse.json({error:error instanceof Error?error.message:'Could not create the Tablely subscription.'},{status:502});}
+  }catch(error:unknown){
+    console.error('subscriptions/create: provider subscription creation failed',{planId:parsed.data.planId,interval:parsed.data.interval,providerPlanId:context.provider_plan_id,error:error instanceof Error?error.message:'unknown error'});
+    const providerMessage=error instanceof Error ? error.message : '';
+    const normalized=providerMessage.toLowerCase();
+    const safeError=normalized.includes('does not exist')||normalized.includes('not belong')||normalized.includes('invalid plan')||normalized.includes('plan')&&normalized.includes('found')
+      ? 'The Tablely billing plan is not valid for the currently configured Razorpay account. Please ask a platform administrator to re-provision this plan.'
+      : 'Could not create the Tablely subscription. Please try again or contact support.';
+    return NextResponse.json({error:safeError},{status:502});
+  }
 }

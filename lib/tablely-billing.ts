@@ -15,9 +15,10 @@ type RazorpaySubscription = {
   short_url?: string;
 };
 
-type RazorpayPlan = { id: string; period: string; interval: number; item?: { id?: string; name?: string; amount?: number; currency?: string } };
+type RazorpayPlan = { id: string; period: string; interval: number; item?: { id?: string; name?: string; amount?: number; currency?: string }; notes?: Record<string, string>; created_at?: number };
 type RazorpayInvoice = { id: string; status?: string; amount?: number; amount_paid?: number; currency?: string; date?: number; issued_at?: number; billing_start?: number; billing_end?: number; short_url?: string; description?: string };
 type InvoiceCollection = { count: number; items: RazorpayInvoice[] };
+type RazorpayPlanCollection = { count: number; items: RazorpayPlan[] };
 
 type BillingConfig = { keyId: string; secret: string; webhookSecret: string; environment: string };
 
@@ -68,7 +69,7 @@ export function getTablelyBillingConfigStatus() {
   };
 }
 
-export async function createTablelyPlan(input: { name: string; description?: string; amountRupees: number; currency?: string; period?: 'monthly' | 'yearly' }) {
+export async function createTablelyPlan(input: { name: string; description?: string; amountRupees: number; currency?: string; period?: 'monthly' | 'yearly'; provisioningId?: string }) {
   return razorpayRequest<RazorpayPlan>('/plans', {
     method: 'POST',
     body: JSON.stringify({
@@ -80,9 +81,28 @@ export async function createTablelyPlan(input: { name: string; description?: str
         amount: Math.round(input.amountRupees * 100),
         currency: input.currency || 'INR',
       },
-      notes: { tablely_plan: input.name.toUpperCase() },
+      notes: {
+        tablely_plan: input.name.toUpperCase(),
+        ...(input.provisioningId ? { tablely_provisioning_id: input.provisioningId } : {}),
+      },
     }),
   });
+}
+
+export async function fetchTablelyPlan(providerPlanId: string) {
+  return razorpayRequest<RazorpayPlan>(`/plans/${encodeURIComponent(providerPlanId)}`);
+}
+
+export async function findTablelyPlanByProvisioningId(input: { provisioningId: string; createdAt?: string | null }) {
+  const from = input.createdAt ? Math.max(0, Math.floor(new Date(input.createdAt).getTime() / 1000) - 3600) : Math.floor(Date.now() / 1000) - 86400;
+  const to = Math.floor(Date.now() / 1000) + 60;
+  for (let skip = 0; skip <= 1000; skip += 100) {
+    const result = await razorpayRequest<RazorpayPlanCollection>(`/plans?from=${from}&to=${to}&count=100&skip=${skip}`);
+    const match = (result.items ?? []).find((plan) => plan.notes?.tablely_provisioning_id === input.provisioningId);
+    if (match) return match;
+    if (!result.items || result.items.length < 100) return null;
+  }
+  return null;
 }
 
 // Razorpay caps total_count per plan period, and the cap for a yearly plan is far
