@@ -26,14 +26,27 @@ export default function CustomerCheckoutClient({ restaurantSlug, tableCode }: { 
   async function saveAuthenticatedCustomerContact(name:string,phone:string){
     const supabase=getSupabaseBrowserClient();
     if(!supabase)return;
+
+    // Customer name/phone are already sent with the order. Profile syncing is
+    // optional for guest checkout, so an absent Auth session must never block
+    // PAY_AT_COUNTER or PAY_NOW.
     const{data:{user},error:userError}=await supabase.auth.getUser();
-    if(userError)throw new Error(userError.message);
+    if(userError){
+      if(userError.message.toLowerCase().includes('auth session missing'))return;
+      return;
+    }
     if(!user)return;
-    const{data:profile,error:profileError}=await supabase.from('customer_profiles').select('customer_account_enabled').eq('auth_user_id',user.id).maybeSingle();
-    if(profileError)throw new Error(profileError.message);
-    if(!profile?.customer_account_enabled)return;
-    const{error:updateError}=await supabase.rpc('update_customer_profile',{p_name:name,p_phone:phone});
-    if(updateError)throw new Error(updateError.message);
+
+    const{data:profile,error:profileError}=await supabase
+      .from('customer_profiles')
+      .select('customer_account_enabled')
+      .eq('auth_user_id',user.id)
+      .maybeSingle();
+    if(profileError||!profile?.customer_account_enabled)return;
+
+    // Profile sync is best-effort; never turn an otherwise valid order into
+    // an authentication/profile-sync failure.
+    await supabase.rpc('update_customer_profile',{p_name:name,p_phone:phone});
   }
   async function placeCounterOrder(){const result=await createPublicOrder({tableCode,items:cart,paymentMethod:'PAY_AT_COUNTER',idempotencyKey:checkoutKey(tableCode),note,customerName:customerName.trim(),customerPhone:customerPhone.trim(),couponCode:coupon||undefined});finishOrder(result)}
   async function placePayLaterOrder(){const session=await openPayLaterSession(tableCode);const result=await createPayLaterOrder({tableCode,items:cart,sessionId:session.id,idempotencyKey:checkoutKey(tableCode),note,couponCode:coupon||undefined});finishOrder(result)}
