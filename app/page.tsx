@@ -56,6 +56,13 @@ export default async function Home() {
             <Link className="button button-primary" href="/signup">Get started</Link>
           </div>
         </div>
+        <div className="container mobile-site-links" aria-label="Mobile site navigation">
+          <a href="#features">Features</a>
+          <a href="#pricing">Pricing</a>
+          <a href="#how">How it works</a>
+          <Link href="/login">Login</Link>
+          <Link className="mobile-site-cta" href="/signup">Get started <ArrowRight size={14} /></Link>
+        </div>
       </nav>
 
       <section className="hero-section">

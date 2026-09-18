@@ -1605,3 +1605,242 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .cms-principle-row, .cms-legal-row { grid-template-columns: 1fr; }
   .cms-principle-row textarea, .cms-legal-row textarea { grid-column: auto; }
 }
+
+
+/* TABLELY MOBILE MARKETING + AUTH RESPONSIVENESS */
+.mobile-site-links { display: none; }
+
+@media (max-width: 760px) {
+  body, .marketing-page, .public-page, .auth-page {
+    overflow-x: hidden;
+  }
+
+  .marketing-nav {
+    position: sticky;
+    top: 0;
+  }
+
+  .marketing-nav .nav-inner {
+    min-height: 64px;
+    gap: 12px;
+  }
+
+  .marketing-nav .brand {
+    min-width: 0;
+    font-size: 17px;
+  }
+
+  .marketing-nav .brand-logo {
+    width: 30px;
+    height: 30px;
+    object-fit: contain;
+  }
+
+  .marketing-nav .desktop-links {
+    display: none;
+  }
+
+  .mobile-site-links {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+    padding-bottom: 10px;
+  }
+
+  .mobile-site-links > a {
+    min-width: 0;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 7px 8px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--ink);
+    text-decoration: none;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-align: center;
+    line-height: 1.15;
+  }
+
+  .mobile-site-links > a:focus-visible,
+  .mobile-site-links > a:hover {
+    border-color: var(--orange);
+    outline: none;
+  }
+
+  .mobile-site-links .mobile-site-cta {
+    grid-column: span 2;
+    border-color: var(--orange);
+    background: var(--orange);
+    color: var(--ink);
+  }
+
+  .hero-section {
+    padding-top: 48px;
+  }
+
+  .hero-section h1 {
+    font-size: clamp(40px, 11vw, 54px);
+    line-height: .98;
+    max-width: 100%;
+  }
+
+  .hero-copy {
+    font-size: 15px;
+    line-height: 1.65;
+  }
+
+  .hero-section .button-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+
+  .hero-section .button-row > .button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .hero-dashboard {
+    min-height: 360px;
+    margin-top: 18px;
+  }
+
+  .hero-window {
+    width: min(100%, 560px);
+    transform: none;
+  }
+
+  .floating-insight {
+    transform: scale(.92);
+  }
+
+  .brand-strip-inner {
+    overflow-x: auto;
+    white-space: nowrap;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+  }
+
+  .pricing-section {
+    padding-bottom: 52px;
+  }
+
+  .pricing-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .footer-inner {
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .footer-links {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 16px;
+  }
+
+  .footer-links a {
+    min-width: 0;
+    line-height: 1.35;
+  }
+
+  /* Authentication pages must collapse the split layout on phones. */
+  .auth-page-split {
+    grid-template-columns: 1fr;
+    min-height: 100dvh;
+  }
+
+  .auth-visual {
+    min-height: auto;
+    padding: 20px 16px 22px;
+    gap: 16px;
+  }
+
+  .auth-visual-copy {
+    margin: 20px 0 0;
+  }
+
+  .auth-visual-copy h1 {
+    font-size: clamp(34px, 10vw, 46px);
+  }
+
+  .auth-visual-copy p {
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .auth-panel,
+  .auth-panel-right {
+    width: 100%;
+    max-width: 620px;
+    padding: 20px 4px 32px;
+  }
+
+  .auth-panel .back-link {
+    margin-bottom: 24px;
+  }
+
+  .auth-panel h1 {
+    font-size: clamp(34px, 10vw, 46px);
+  }
+
+  .auth-form label {
+    font-size: 12px;
+  }
+
+  .auth-form input,
+  .auth-form textarea {
+    min-height: 48px;
+    font-size: 16px; /* prevents iOS Safari auto-zoom */
+  }
+}
+
+@media (max-width: 520px) {
+  .mobile-site-links {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mobile-site-links .mobile-site-cta {
+    grid-column: 1 / -1;
+  }
+
+  .hero-section .button-row {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-dashboard {
+    min-height: 300px;
+  }
+
+  .hero-window {
+    padding: 8px;
+    border-radius: 16px;
+  }
+
+  .floating-insight {
+    display: none;
+  }
+
+  .footer-links {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .public-topbar-inner {
+    min-height: 58px;
+    padding-inline: 14px;
+  }
+
+  .public-topbar-label {
+    max-width: 48%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
