@@ -1,0 +1,2 @@
+import Link from 'next/link';
+export default function ContactPage(){return <main className="auth-page"><section className="auth-panel"><span className="eyebrow">TABLELY ENTERPRISE</span><h1>Let’s build the right setup.</h1><p>Tell us about your restaurants and our team will get in touch within 24 hours.</p><Link className="button button-primary button-full" href="/signup">Start a conversation</Link><Link className="back-link" href="/">Back to Tablely</Link></section></main>;}

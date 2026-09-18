@@ -1,0 +1,15 @@
+-- Run once in Supabase SQL Editor.
+-- Equivalent to migration 202609180032_shared_paylater_customer_flow.sql.
+
+alter table public.table_sessions add column if not exists join_code_display text;
+
+create or replace function public.create_shared_pay_later_tab(p_table_code text,p_session_token text default null,p_device_token text default null) returns table(session public.table_sessions,join_code text) language plpgsql security definer set search_path=public as $$ declare v_session public.table_sessions%rowtype; v_profile uuid:=public.build22_current_customer_profile(); v_code text; begin if v_profile is null then raise exception 'Authentication required' using errcode='42501'; end if; v_session:=public.open_pay_later_session(p_table_code,p_session_token,p_device_token); insert into public.table_session_members(session_id,customer_profile_id,role) values(v_session.id,v_profile,'OWNER') on conflict(session_id,customer_profile_id) do nothing; if v_session.join_code_hash is null or v_session.join_code_display is null then v_code:=upper(substr(encode(extensions.gen_random_bytes(6),'hex'),1,10)); update public.table_sessions set join_code_hash=public.build19_hash_token(v_code),join_code_display=v_code where id=v_session.id returning * into v_session; else v_code:=v_session.join_code_display; end if; return query select v_session,v_code; end; $$;
+
+drop function if exists public.get_my_active_pay_later_sessions();
+create function public.get_my_active_pay_later_sessions() returns table(session_id uuid,table_id uuid,table_number integer,restaurant_name text,outstanding numeric,status text,role text,join_code text) language sql security definer stable set search_path=public as $$ select s.id,s.table_id,t.table_number,o.name,coalesce((select sum(ord.total) from public.orders ord where ord.table_session_id=s.id and ord.payment_status='PENDING' and ord.status not in('CANCELLED','REJECTED')),0),s.status,case when s.owner_customer_id=public.build22_current_customer_profile() then 'OWNER' else 'MEMBER' end,case when s.owner_customer_id=public.build22_current_customer_profile() then s.join_code_display else null end from public.table_sessions s join public.tables t on t.id=s.table_id join public.branches b on b.id=s.branch_id join public.organizations o on o.id=b.organization_id where s.is_pay_later and s.status in('ACTIVE','SETTLING') and (s.owner_customer_id=public.build22_current_customer_profile() or exists(select 1 from public.table_session_members m where m.session_id=s.id and m.customer_profile_id=public.build22_current_customer_profile())) order by s.opened_at desc; $$;
+
+revoke execute on function public.create_shared_pay_later_tab(text,text,text) from anon,public;
+grant execute on function public.create_shared_pay_later_tab(text,text,text) to authenticated;
+revoke execute on function public.get_my_active_pay_later_sessions() from anon,public;
+grant execute on function public.get_my_active_pay_later_sessions() to authenticated;
+notify pgrst,'reload schema';

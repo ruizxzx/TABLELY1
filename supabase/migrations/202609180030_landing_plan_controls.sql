@@ -1,0 +1,75 @@
+-- Landing-page CMS and customizable plan presentation.
+
+create table if not exists public.platform_marketing_settings (
+  id boolean primary key default true check (id),
+  hero_kicker text not null default 'BUILT FOR AMBITIOUS RESTAURANTS',
+  hero_title text not null default 'More orders. Less chaos.',
+  hero_description text not null default 'Tablely gives your restaurant a beautifully simple operating system — from the first QR scan to the final payment.',
+  hero_primary_label text not null default 'Build your restaurant',
+  hero_primary_href text not null default '/signup',
+  hero_secondary_label text not null default 'See how it works',
+  hero_secondary_href text not null default '#how',
+  features_title text not null default 'Everything your team needs to run a better shift.',
+  features_description text not null default 'One calm workspace for ordering, kitchen flow, payments and the decisions that move your restaurant forward.',
+  how_title text not null default 'From scan to served in a few simple steps.',
+  how_steps jsonb not null default '[{"number":"01","title":"Create restaurant","copy":"Set up your name, branch, menu and tables."},{"number":"02","title":"Generate QR codes","copy":"Print one unique code for every table."},{"number":"03","title":"Receive orders","copy":"Customers order while the kitchen sees them live."},{"number":"04","title":"Serve & complete","copy":"Move the order through the workflow and close the table."}]'::jsonb,
+  updated_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id)
+);
+
+insert into public.platform_marketing_settings(id) values (true) on conflict (id) do nothing;
+alter table public.platform_marketing_settings enable row level security;
+revoke all on public.platform_marketing_settings from anon, authenticated, public;
+
+insert into public.saas_plans(id,name,price_monthly,price_annual,trial_days,features,active,description,currency,billing_interval)
+values ('ENTERPRISE','Enterprise',0,0,0,jsonb_build_object(
+  'enterprise_contact',true,'custom_lines',jsonb_build_array('Custom pricing and rollout','Dedicated success support','Advanced security and controls'),
+  'ONLINE_PAYMENTS',true,'UNLIMITED_STAFF',true,'SERVICE_REQUESTS',true,'ANALYTICS',true,'PAYMENT_TRACKING',true,'CUSTOM_BRANDING',true,'MULTI_BRANCH',true,'ADVANCED_ANALYTICS',true,'CROSS_BRANCH_REPORTING',true,'ADVANCED_PERMISSIONS',true,'CUSTOM_DOMAIN',true
+),'true','For restaurant groups that need a tailored operating system.','INR','month')
+on conflict (id) do update set name=excluded.name,features=excluded.features,description=excluded.description,active=true;
+
+create or replace function public.get_public_marketing_settings()
+returns public.platform_marketing_settings
+language sql stable security definer set search_path=public
+as $$ select * from public.platform_marketing_settings where id=true; $$;
+
+create or replace function public.admin_get_marketing_settings()
+returns public.platform_marketing_settings
+language plpgsql security definer set search_path=public
+as $$
+declare
+  v_row public.platform_marketing_settings;
+begin
+  if not public.is_platform_admin() then raise exception 'Platform admin access required' using errcode='42501'; end if;
+  select * into v_row from public.platform_marketing_settings where id=true;
+  return v_row;
+end;
+$$;
+
+create or replace function public.admin_update_marketing_settings(
+  p_hero_kicker text, p_hero_title text, p_hero_description text,
+  p_hero_primary_label text, p_hero_primary_href text,
+  p_hero_secondary_label text, p_hero_secondary_href text,
+  p_features_title text, p_features_description text, p_how_title text, p_how_steps jsonb
+)
+returns public.platform_marketing_settings
+language plpgsql security definer set search_path=public
+as $$
+declare v_row public.platform_marketing_settings;
+begin
+  if not public.is_platform_admin() then raise exception 'Platform admin access required' using errcode='42501'; end if;
+  update public.platform_marketing_settings set
+    hero_kicker=left(trim(p_hero_kicker),120), hero_title=left(trim(p_hero_title),180), hero_description=left(trim(p_hero_description),500),
+    hero_primary_label=left(trim(p_hero_primary_label),80), hero_primary_href=left(trim(p_hero_primary_href),200),
+    hero_secondary_label=left(trim(p_hero_secondary_label),80), hero_secondary_href=left(trim(p_hero_secondary_href),200),
+    features_title=left(trim(p_features_title),180), features_description=left(trim(p_features_description),500),
+    how_title=left(trim(p_how_title),180), how_steps=coalesce(p_how_steps,'[]'::jsonb), updated_at=now(), updated_by=auth.uid()
+  where id=true returning * into v_row;
+  insert into public.admin_audit_logs(actor_user_id,action,entity_type,metadata) values(auth.uid(),'MARKETING_SETTINGS_UPDATED','MARKETING_SETTINGS','{}'::jsonb);
+  return v_row;
+end;
+$$;
+
+grant execute on function public.get_public_marketing_settings() to anon, authenticated;
+grant execute on function public.admin_get_marketing_settings() to authenticated;
+grant execute on function public.admin_update_marketing_settings(text,text,text,text,text,text,text,text,text,text,jsonb) to authenticated;

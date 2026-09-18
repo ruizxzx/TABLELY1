@@ -1,0 +1,34 @@
+'use client';
+import { useEffect, useState } from 'react';
+import { Plus, Save, Trash2, RefreshCw, RotateCcw } from 'lucide-react';
+import { StudioShell } from '@/components/StudioShell';
+import { SectionHeader } from '@/components/SectionHeader';
+import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { getCurrentRestaurantContext } from '@/lib/restaurant-context';
+
+type Scope='branch'|'organization';
+type Charge={id?:string;key:string;name:string;charge_type:'TAX'|'FEE';calculation_type:'PERCENT'|'FIXED';value:number;enabled:boolean;sort_order:number;inherited?:boolean};
+const newKey=()=>`new-${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+const empty=():Charge=>({key:newKey(),name:'',charge_type:'FEE',calculation_type:'PERCENT',value:0,enabled:true,sort_order:0});
+
+export default function ChargesSettingsPage(){
+ const[rows,setRows]=useState<Charge[]>([]);const[loading,setLoading]=useState(true);const[busy,setBusy]=useState<string|null>(null);const[error,setError]=useState<string|null>(null);const[msg,setMsg]=useState<string|null>(null);
+ const[role,setRole]=useState<string>('');const[scope,setScope]=useState<Scope>('branch');const[branchId,setBranchId]=useState('');const[branchName,setBranchName]=useState('');
+ useEffect(()=>{
+   const s=getSupabaseBrowserClient();if(!s)return;
+   void getCurrentRestaurantContext(s).then(async c=>{
+     if(!c.data)return;
+     setRole(c.data.staff.role);setBranchId(c.data.branch.id);setBranchName(c.data.branch.name);
+     if(c.data.staff.role!=='OWNER')setScope('branch');
+   });
+ },[]);
+ async function load(){setLoading(true);setError(null);try{const q=new URLSearchParams();q.set('scope',scope);if(scope==='branch'&&branchId)q.set('branchId',branchId);const r=await fetch(`/api/settings/charges?${q.toString()}`,{cache:'no-store'});const b=await r.json();if(!r.ok)throw new Error(b.error??'Could not load charges.');setRows((b.charges??[]).map((x:Omit<Charge,'key'>)=>({...x,key:x.id as string,value:Number(x.value),sort_order:Number(x.sort_order),inherited:Boolean((x as Charge).inherited)})));}catch(e:unknown){setError(e instanceof Error?e.message:'Could not load charges.')}finally{setLoading(false)}}
+ useEffect(()=>{if((scope==='organization'||branchId)&&role)void load();},[scope,branchId,role]);
+ function update(key:string,keyName:keyof Charge,value:unknown){setRows(cur=>cur.map(r=>(r.key===key?{...r,[keyName]:value,inherited:false}:r)))}
+ function add(){setRows(cur=>[...cur,{...empty(),sort_order:cur.length}])}
+ async function save(row:Charge){setBusy(row.key);setError(null);setMsg(null);try{const payload={id:row.inherited?undefined:row.id,name:row.name,charge_type:row.charge_type,calculation_type:row.calculation_type,value:row.value,enabled:row.enabled,sort_order:row.sort_order,scope,branchId:scope==='branch'?branchId:undefined};const r=await fetch('/api/settings/charges',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});const b=await r.json();if(!r.ok)throw new Error(b.error??'Could not save charge.');setMsg(scope==='branch'?'Branch charge saved.':'Default charge saved.');await load();}catch(e:unknown){setError(e instanceof Error?e.message:'Could not save charge.')}finally{setBusy(null)}}
+ async function remove(row:Charge){if(!row.id)return setRows(cur=>cur.filter(x=>x.key!==row.key));if(!window.confirm(`Remove ${row.name}?`))return;setBusy(row.key);setError(null);try{const q=new URLSearchParams({id:row.id,scope, ...(scope==='branch'?{branchId}: {})});const r=await fetch(`/api/settings/charges?${q.toString()}`,{method:'DELETE'});const b=await r.json();if(!r.ok)throw new Error(b.error??'Could not delete charge.');setMsg('Charge removed.');await load();}catch(e:unknown){setError(e instanceof Error?e.message:'Could not delete charge.')}finally{setBusy(null)}}
+ if(loading)return <StudioShell><div className="setup-loading">Loading charges…</div></StudioShell>;
+ const inherited=scope==='branch'&&rows.length>0&&rows.every(r=>r.inherited);
+ return <StudioShell><SectionHeader eyebrow="SETTINGS" title="Checkout charges" description={scope==='branch'?`Charges for ${branchName}. Branch-specific charges override the organization default for this branch.`:'Default charges used by branches without a branch-specific configuration.'} action={<div className="button-row">{role==='OWNER'?<select className="button button-light" value={scope} onChange={e=>setScope(e.target.value as Scope)}><option value="branch">Current branch</option><option value="organization">Organization default</option></select>:null}<button className="button button-light" onClick={()=>void load()}><RefreshCw size={15}/> Refresh</button><button className="button button-primary" onClick={add}><Plus size={15}/> Add charge</button></div>}/>{error?<div className="notice notice-error" role="alert">{error}</div>:null}{msg?<div className="notice notice-info">{msg}</div>:null}{inherited?<div className="notice notice-info">This branch is currently using the organization defaults. Saving or removing a charge will safely create a branch-specific copy before changing it.</div>:null}<section className="surface-card charge-settings-list"><div className="charge-settings-note">Charges are calculated server-side and snapshotted into orders. Customer checkout always resolves the branch from its table QR before loading charges.</div>{rows.length===0?<div className="empty-wide"><h2>No optional charges</h2><p>Add GST or another charge only when needed.</p></div>:rows.map(r=><div className="charge-settings-row" key={r.key}><input value={r.name} maxLength={80} placeholder="e.g. GST or Platform charge" onChange={e=>update(r.key,'name',e.target.value)}/><select value={r.charge_type} onChange={e=>update(r.key,'charge_type',e.target.value as Charge['charge_type'])}><option value="TAX">Tax</option><option value="FEE">Fee</option></select><select value={r.calculation_type} onChange={e=>update(r.key,'calculation_type',e.target.value as Charge['calculation_type'])}><option value="PERCENT">Percent</option><option value="FIXED">Fixed ₹</option></select><input type="number" min="0" step="0.01" value={r.value} onChange={e=>update(r.key,'value',Number(e.target.value))}/><label className="charge-enable"><input type="checkbox" checked={r.enabled} onChange={e=>update(r.key,'enabled',e.target.checked)}/> Enabled</label><div className="button-row"><button className="button button-light compact" disabled={busy===r.key} onClick={()=>void save(r)}><Save size={13}/> Save</button><button className="button button-light compact customer-danger-button" disabled={busy===r.key} onClick={()=>void remove(r)}><Trash2 size={13}/></button>{scope==='branch'&&r.inherited?<span className="muted" title="Organization default; a branch copy is created when you change it"><RotateCcw size={13}/></span>:null}</div></div>)}</section></StudioShell>;
+}
