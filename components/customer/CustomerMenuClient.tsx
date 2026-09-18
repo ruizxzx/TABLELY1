@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Search, Plus, Leaf, Flame, Star, Languages, Tag } from 'lucide-react';
+import { Search, Plus, Leaf, Flame, Star, Languages, Tag, ArrowRight } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { CustomerFrame } from './CustomerLayout';
 import { cartStorageKey, getPublicMenu, getPublicTableContext, getPublicActiveOffers, type PublicCouponOffer, type PublicMenuItem, type CartItem, readCart, saveCart, saveCouponCode, formatMoney } from '@/lib/customer';
@@ -83,7 +83,9 @@ export default function CustomerMenuClient({ restaurantSlug, tableCode }: { rest
         <Link href={`/r/${restaurantSlug}/table/${tableCode}/product/${item.item_id}`} className="customer-food-media">{item.image_url?<img src={item.image_url} alt=""/>:<span>{item.item_name?.slice(0,1)}</span>}{item.is_featured?<em><Star size={11} fill="currentColor"/> Featured</em>:item.is_popular?<em><Star size={11} fill="currentColor"/> Popular</em>:null}{item.item_id&&promotedItemIds.has(item.item_id)?<em><Tag size={11}/> Offer</em>:null}</Link>
         <div className="customer-food-body"><div className="customer-food-top"><div><h2>{displayName(item)}</h2><p>{item.item_description||'Freshly prepared.'}</p></div><strong>{formatMoney(Number(item.item_price))}</strong></div>
           <div className="customer-food-meta">{item.is_veg?<span><Leaf size={12}/> Veg</span>:<span>Non-veg</span>}{item.is_spicy?<span><Flame size={12}/> Spicy</span>:null}{item.meal_section?<span>{item.meal_section}</span>:null}{item.allergens?.length?<span>Allergen info</span>:null}{item.preparation_minutes?<span>{item.preparation_minutes} min</span>:null}</div>
-          {item.variants?.length||item.modifier_groups?.length?<Link className="customer-add" href={`/r/${restaurantSlug}/table/${tableCode}/product/${item.item_id}`}>Customize</Link>:<button className="customer-add" disabled={!item.is_available} onClick={()=>addItem(item)}>{item.is_available?<><Plus size={15}/> Add</>:'Sold out'}</button>}
+          {item.variants?.length||item.modifier_groups?.length
+            ? <Link className="customer-add" href={`/r/${restaurantSlug}/table/${tableCode}/product/${item.item_id}`}><span>Customize</span><ArrowRight size={15} aria-hidden="true"/></Link>
+            : <button className="customer-add" disabled={!item.is_available} onClick={()=>addItem(item)}>{item.is_available?<><Plus size={15} aria-hidden="true"/> <span>Add</span></>:'Sold out'}</button>}
         </div>
       </article>)}</div>
       {items.length===0?<div className="customer-empty">No dishes match your search.</div>:null}

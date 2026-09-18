@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import './globals.css';
 import { getSupabaseServerClient } from '@/lib/supabase-server';
 import { PlatformBrandRuntime } from '@/components/PlatformBrandRuntime';
+import { Analytics } from '@vercel/analytics/next';
 
 const FALLBACK_TITLE = 'Tablely — Restaurant Ordering OS';
 const FALLBACK_DESCRIPTION = 'QR ordering, restaurant operations and kitchen workflow in one system.';
@@ -51,6 +52,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
       <body>
         <PlatformBrandRuntime />
         {children}
+        <Analytics />
       </body>
     </html>
   );
