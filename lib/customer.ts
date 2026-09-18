@@ -344,6 +344,33 @@ export async function openPayLaterSession(tableCode: string) {
   return (Array.isArray(data) ? data[0] : data) as { id: string };
 }
 
+export async function saveOrderEmailNotificationSubscription(args: {
+  orderId: string;
+  trackingToken: string;
+  email: string;
+}) {
+  const response = await fetch('/api/customer/order-email-notifications', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      orderId: args.orderId,
+      trackingToken: args.trackingToken,
+      email: args.email,
+    }),
+  });
+
+  const body = await response.json().catch(() => ({} as { error?: string }));
+  if (!response.ok) {
+    throw new Error(body?.error ?? 'Could not save email updates.');
+  }
+
+  return body as {
+    ok: true;
+    subscriptionId: string;
+    email: string;
+  };
+}
+
 export async function createPayLaterOrder(args: {
   tableCode: string;
   items: CartItem[];
