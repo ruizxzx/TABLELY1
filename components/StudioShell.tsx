@@ -78,6 +78,7 @@ export function StudioShell({ children }: { children: ReactNode }) {
   const [restaurantName, setRestaurantName] = useState('Loading…');
   const [branchName, setBranchName] = useState('');
   const [branches, setBranches] = useState<{id:string;name:string}[]>([]);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [branchId, setBranchId] = useState('');
   const [switchingBranch, setSwitchingBranch] = useState(false);
   const [userName, setUserName] = useState('Owner');
@@ -124,6 +125,13 @@ export function StudioShell({ children }: { children: ReactNode }) {
       setBranches(available);
       setBranchId(activeBranch?.id ?? '');
       setBranchName(activeBranch?.name ?? 'Main Branch');
+      if (activeBranch?.id) {
+        void supabase.rpc('get_effective_branch_brand', { p_branch_id: activeBranch.id }).then(({ data: brandRow }) => {
+          if (!active) return;
+          const row = Array.isArray(brandRow) ? brandRow[0] : brandRow;
+          setLogoUrl(row?.logo_url ?? null);
+        });
+      }
       setUserName(String(user.user_metadata?.full_name ?? user.email ?? 'Owner'));
       setRole(String(staff.role ?? 'OWNER'));
       setCanKitchen(Boolean((staff as { can_kitchen?: unknown }).can_kitchen));
@@ -223,6 +231,23 @@ export function StudioShell({ children }: { children: ReactNode }) {
     router.refresh();
   }
 
+  // Re-resolve the branch logo whenever the branding studio saves a change
+  // (org default or this branch's override), so the sidebar/topbar reflect
+  // it immediately without a full reload.
+  useEffect(() => {
+    if (!branchId) return;
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+    const reload = () => {
+      void supabase.rpc('get_effective_branch_brand', { p_branch_id: branchId }).then(({ data: brandRow }) => {
+        const row = Array.isArray(brandRow) ? brandRow[0] : brandRow;
+        setLogoUrl(row?.logo_url ?? null);
+      });
+    };
+    window.addEventListener('tablely-restaurant-brand-change', reload);
+    return () => window.removeEventListener('tablely-restaurant-brand-change', reload);
+  }, [branchId]);
+
   useEffect(() => {
     const saved = window.localStorage.getItem('tablely_sidebar_collapsed');
     if (saved === '1') setCollapsed(true);
@@ -256,7 +281,9 @@ export function StudioShell({ children }: { children: ReactNode }) {
           </button>
         </div>
         <div className="restaurant-switcher">
-          <div className="avatar">{restaurantName.slice(0,2).toUpperCase()}</div>
+          <div className="avatar avatar-logo">
+            {logoUrl ? <img src={logoUrl} alt="" className="avatar-logo-img" /> : restaurantName.slice(0,2).toUpperCase()}
+          </div>
           <div className="restaurant-switcher-copy">
             <strong>{restaurantName}</strong>
             {branches.length > 1 ? <select className="branch-switcher" value={branchId} disabled={switchingBranch} onChange={(e) => void switchBranch(e.target.value)} aria-label="Active branch">{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</select> : <span>{branchName}</span>}
