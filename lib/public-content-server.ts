@@ -1,6 +1,6 @@
 import { getSupabaseServerClient } from '@/lib/supabase-server';
 
-export async function getPublishedContent<T>(slug: 'contact' | 'vision' | 'privacy' | 'terms', fallback: T): Promise<T> {
+export async function getPublishedContent<T>(slug: 'contact' | 'vision' | 'privacy' | 'terms' | 'cancellation-refund-policy', fallback: T): Promise<T> {
   try {
     const client = await getSupabaseServerClient();
     if (!client) return fallback;
