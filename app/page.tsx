@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { ArrowRight, Check, ChefHat, LayoutDashboard, QrCode, Smartphone, BarChart3, Clock3, CreditCard, Sparkles, Zap, ShieldCheck, Users, UtensilsCrossed, TrendingUp } from 'lucide-react';
 import { Brand } from '@/components/Brand';
 import { getSupabaseServerClient } from '@/lib/supabase-server';
+import { PublicFooter } from '@/components/public/PublicFooter';
 
 const features = [
   { title: 'QR ordering', copy: 'Customers scan the table QR and order directly from their phone.', Icon: QrCode },
@@ -167,9 +168,7 @@ export default async function Home() {
         </div>
       </section>
 
-      <footer className="footer">
-        <div className="container footer-inner"><Brand /><span>Restaurant ordering, simplified.</span><div className="footer-links"><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link><Link href="/admin-access" className="footer-admin-link" aria-label="Platform admin">·</Link></div></div>
-      </footer>
+      <PublicFooter />
     </div>
   );
 }
