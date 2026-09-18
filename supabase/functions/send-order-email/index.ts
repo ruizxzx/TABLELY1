@@ -17,6 +17,7 @@ type OrderRow = {
   branch_id: string;
   table_id: string;
   total: number | string;
+  tracking_token: string;
   cancellation_reason: string | null;
   rejection_reason: string | null;
   rejection_note: string | null;
@@ -77,7 +78,7 @@ function money(v: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(v);
 }
 
-function render(event: EventRow, order: OrderRow, restaurantName: string, tableNumber: number) {
+function render(event: EventRow, order: OrderRow, restaurantName: string, restaurantSlug: string, tableCode: string, tableNumber: number) {
   const copy = COPY[event.event_type];
   if (!copy) throw new Error(`Unsupported event type: ${event.event_type}`);
   let message = copy.message;
@@ -88,9 +89,16 @@ function render(event: EventRow, order: OrderRow, restaurantName: string, tableN
   }
   const total = Number(order.total);
   const totalText = Number.isFinite(total) ? money(total) : "—";
-  const html = `<!doctype html><html><body style="margin:0;background:#f6f6f6;font-family:Arial,Helvetica,sans-serif;color:#111"><div style="max-width:600px;margin:0 auto;padding:32px 16px"><div style="background:#fff;border:1px solid #e5e5e5;border-radius:12px;padding:28px"><div style="font-size:20px;font-weight:700;margin-bottom:24px">TABLELY</div><div style="font-size:13px;color:#666;margin-bottom:8px">${escapeHtml(restaurantName)}</div><h1 style="font-size:26px;line-height:1.2;margin:0 0 12px">${escapeHtml(copy.title)}</h1><p style="font-size:15px;line-height:1.6;margin:0 0 24px">${escapeHtml(message)}</p><div style="background:#f8f8f8;border-radius:10px;padding:16px"><div style="font-size:13px;color:#666">Order #${escapeHtml(String(order.order_number))}</div><div style="font-size:14px;margin-top:6px">Table ${escapeHtml(String(tableNumber))}</div><div style="font-size:14px;margin-top:6px">Total ${escapeHtml(totalText)}</div></div><p style="font-size:12px;line-height:1.5;color:#777;margin:24px 0 0">This is a transactional update for your TABLELY restaurant order.</p></div></div></body></html>`;
-  const text = ["TABLELY", "", restaurantName, copy.title, "", message, "", `Order #${order.order_number}`, `Table ${tableNumber}`, `Total ${totalText}`, "", "This is a transactional update for your TABLELY restaurant order."].join("\n");
-  return { subject: `TABLELY — ${copy.title} · Order #${order.order_number}`, html, text };
+  const appBase = (Deno.env.get("TABLELY_PUBLIC_APP_URL")?.trim() || "https://www.tablely.in").replace(/\/$/, "");
+  const orderUrl = `${appBase}/r/${encodeURIComponent(restaurantSlug)}/table/${encodeURIComponent(tableCode)}/order/${encodeURIComponent(order.tracking_token)}`;
+  const badge = event.event_type.replace("ORDER_", "").replaceAll("_", " ");
+  const reasonLine = message !== copy.message ? `<div style="font-size:13px;color:#555;margin-top:10px">${escapeHtml(message.replace(copy.message, "").trim())}</div>` : "";
+  const cta = orderUrl ? `<div style="margin-top:24px"><a href="${escapeHtml(orderUrl)}" style="display:inline-block;background:#111;color:#fff;text-decoration:none;font-size:14px;font-weight:700;padding:13px 18px;border-radius:8px">View order</a></div>` : "";
+  const html = `<!doctype html><html><body style="margin:0;background:#f4f4f4;font-family:Arial,Helvetica,sans-serif;color:#111"><div style="max-width:640px;margin:0 auto;padding:28px 14px"><div style="background:#fff;border:1px solid #e3e3e3;border-radius:14px;overflow:hidden"><div style="padding:22px 24px;border-bottom:1px solid #ececec"><div style="font-size:21px;font-weight:800;letter-spacing:.02em">TABLELY</div><div style="font-size:12px;color:#777;margin-top:4px">Order update</div></div><div style="padding:26px 24px"><div style="display:inline-block;background:#f0f0f0;border-radius:999px;padding:6px 10px;font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase">${escapeHtml(badge)}</div><div style="font-size:13px;color:#666;margin-top:16px">${escapeHtml(restaurantName)}</div><h1 style="font-size:28px;line-height:1.2;margin:7px 0 12px">${escapeHtml(copy.title)}</h1><p style="font-size:15px;line-height:1.65;margin:0;color:#222">${escapeHtml(copy.message)}</p>${reasonLine}<div style="background:#f8f8f8;border-radius:11px;padding:17px;margin-top:24px"><div style="font-size:13px;color:#666">Order #${escapeHtml(String(order.order_number))}</div><div style="font-size:14px;margin-top:7px">Table ${escapeHtml(String(tableNumber))}</div><div style="font-size:14px;margin-top:7px">Total ${escapeHtml(totalText)}</div></div>${cta}<p style="font-size:12px;line-height:1.5;color:#777;margin:24px 0 0">This is a transactional update for your TABLELY restaurant order. The View order link is unique to this order.</p></div></div></div></body></html>`;
+  const textLines = ["TABLELY", "", restaurantName, copy.title, "", message, "", `Order #${order.order_number}`, `Table ${tableNumber}`, `Total ${totalText}`];
+  if (orderUrl) textLines.push("", `View order: ${orderUrl}`);
+  textLines.push("", "This is a transactional update for your TABLELY restaurant order.");
+  return { subject: `TABLELY — ${copy.title} · Order #${order.order_number}`, html, text: textLines.join("\n") };
 }
 
 async function failed(db: ReturnType<typeof adminClient>, id: string, message: string) {
@@ -123,16 +131,16 @@ Deno.serve(async (req) => {
     if (subscriptionError || !subscription) { await failed(db, claimed.id, "Email subscription could not be found."); return response({ error: "Email subscription not found." }, 409); }
     if (!(subscription as { enabled: boolean }).enabled) { await failed(db, claimed.id, "Email subscription is disabled."); return response({ error: "Email subscription is disabled." }, 409); }
 
-    const { data: order, error: orderError } = await db.from("orders").select("id,order_number,branch_id,table_id,total,cancellation_reason,rejection_reason,rejection_note").eq("id", claimed.order_id).maybeSingle();
+    const { data: order, error: orderError } = await db.from("orders").select("id,order_number,branch_id,table_id,total,tracking_token,cancellation_reason,rejection_reason,rejection_note").eq("id", claimed.order_id).maybeSingle();
     if (orderError || !order) { await failed(db, claimed.id, "Order could not be loaded."); return response({ error: "Order not found." }, 404); }
     const [{ data: branch, error: branchError }, { data: table, error: tableError }] = await Promise.all([
       db.from("branches").select("id,name,organization_id").eq("id", (order as OrderRow).branch_id).maybeSingle(),
-      db.from("tables").select("id,table_number").eq("id", (order as OrderRow).table_id).maybeSingle(),
+      db.from("tables").select("id,table_number,table_code").eq("id", (order as OrderRow).table_id).maybeSingle(),
     ]);
     if (branchError || !branch) { await failed(db, claimed.id, "Order branch could not be loaded."); return response({ error: "Order branch not found." }, 404); }
     if (tableError || !table) { await failed(db, claimed.id, "Order table could not be loaded."); return response({ error: "Order table not found." }, 404); }
 
-    const { data: org, error: orgError } = await db.from("organizations").select("id,name").eq("id", (branch as { organization_id: string }).organization_id).maybeSingle();
+    const { data: org, error: orgError } = await db.from("organizations").select("id,name,slug").eq("id", (branch as { organization_id: string }).organization_id).maybeSingle();
     if (orgError || !org) { await failed(db, claimed.id, "Restaurant could not be loaded."); return response({ error: "Restaurant not found." }, 404); }
 
     const resendKey = Deno.env.get("RESEND_API_KEY")?.trim();
@@ -140,7 +148,14 @@ Deno.serve(async (req) => {
     const replyTo = Deno.env.get("RESEND_REPLY_TO_EMAIL")?.trim();
     if (!resendKey || !from) { const msg = "Resend is not configured. Set RESEND_API_KEY and RESEND_FROM_EMAIL (or RESEND_ORDER_EMAIL_FROM)."; await failed(db, claimed.id, msg); return response({ error: msg }, 503); }
 
-    const rendered = render(claimed, order as OrderRow, String((org as { name: string }).name), Number((table as { table_number: number }).table_number));
+    const rendered = render(
+      claimed,
+      order as OrderRow,
+      String((org as { name: string }).name),
+      String((org as { slug: string }).slug),
+      String((table as { table_code: string }).table_code),
+      Number((table as { table_number: number }).table_number),
+    );
     const resendPayload: Record<string, unknown> = { from, to: [claimed.recipient_email], subject: rendered.subject, html: rendered.html, text: rendered.text };
     if (replyTo) resendPayload.reply_to = replyTo;
 
