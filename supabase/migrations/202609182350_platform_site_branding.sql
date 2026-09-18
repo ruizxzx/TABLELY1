@@ -22,8 +22,7 @@ as $$
   where b.id = true;
 $$;
 
-drop function if exists public.admin_update_platform_brand(text, text);
-create function public.admin_update_platform_brand(
+create or replace function public.admin_update_platform_brand(
   p_logo_url text,
   p_logo_path text,
   p_site_title text
@@ -94,3 +93,30 @@ revoke execute on function public.admin_get_platform_brand() from public, anon;
 grant execute on function public.admin_get_platform_brand() to authenticated;
 revoke execute on function public.admin_update_platform_brand(text, text, text) from public, anon;
 grant execute on function public.admin_update_platform_brand(text, text, text) to authenticated;
+
+
+create or replace function public.admin_update_platform_brand(p_logo_url text, p_logo_path text)
+returns public.platform_brand_settings
+language plpgsql security definer set search_path=public
+as $$
+declare
+  v_row public.platform_brand_settings;
+begin
+  if not public.is_platform_admin() then
+    raise exception 'Platform admin access required' using errcode = '42501';
+  end if;
+  update public.platform_brand_settings
+  set logo_url = nullif(left(trim(coalesce(p_logo_url, '')), 1000), ''),
+      logo_path = nullif(left(trim(coalesce(p_logo_path, '')), 500), ''),
+      updated_at = now(),
+      updated_by = auth.uid()
+  where id = true
+  returning * into v_row;
+  insert into public.admin_audit_logs(actor_user_id, action, entity_type, metadata)
+  values (auth.uid(), 'PLATFORM_BRAND_UPDATED', 'PLATFORM_BRAND', jsonb_build_object('compatibility_wrapper', true));
+  return v_row;
+end;
+$$;
+
+revoke execute on function public.admin_update_platform_brand(text, text) from public, anon;
+grant execute on function public.admin_update_platform_brand(text, text) to authenticated;

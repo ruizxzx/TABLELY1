@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
 import { getSupabaseServerClient } from '@/lib/supabase-server';
@@ -6,6 +6,12 @@ import { PlatformBrandRuntime } from '@/components/PlatformBrandRuntime';
 
 const FALLBACK_TITLE = 'Tablely — Restaurant Ordering OS';
 const FALLBACK_DESCRIPTION = 'QR ordering, restaurant operations and kitchen workflow in one system.';
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+};
 
 export async function generateMetadata(): Promise<Metadata> {
   try {
