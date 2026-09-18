@@ -99,6 +99,19 @@ export const defaultTerms: LegalContent = {
   ],
 };
 
+export const defaultCancellationRefund: LegalContent = {
+  title: 'Cancellation & Refund Policy',
+  intro: 'Effective Date: 18 September 2026\n\nTABLELY provides restaurant technology and SaaS services, including digital ordering, table management, menu management, payment-related tools, customer management, and related software features.',
+  sections: [
+    { heading: '1. Subscription Cancellation', body: 'Customers may cancel their TABLELY subscription at any time through their TABLELY account or by contacting our support team.\n\nCancellation will prevent future subscription renewals. The subscription will normally remain active until the end of the current paid billing period.' },
+    { heading: '2. Refunds', body: 'Subscription fees are generally non-refundable once a billing period has started, except in the following circumstances:\n\n- A duplicate payment was charged.\n- A payment was charged incorrectly due to a technical error.\n- TABLELY authorizes a refund at its discretion where appropriate.\n- A refund is required under applicable law.\n\nApproved refunds will normally be processed back to the original payment method used for the transaction. The time taken for the refunded amount to appear in the customer\u2019s account may depend on the customer\u2019s bank or payment provider.' },
+    { heading: '3. Failed or Duplicate Payments', body: 'If a payment is deducted but the TABLELY service is not activated because of a payment-processing failure, the transaction will be reviewed and any amount incorrectly charged will be refunded or otherwise reconciled.\n\nDuplicate transactions will be eligible for refund after verification.' },
+    { heading: '4. How to Request a Refund', body: 'To request a cancellation or refund, contact:\n\nEmail: support@tablely.in\n\nPlease provide:\n\n- Account name\n- Registered email address\n- Transaction/payment reference\n- Date of payment\n- Reason for the request\n\nWe may request additional information to verify the transaction.' },
+    { heading: '5. Processing Time', body: 'Once a refund is approved, TABLELY will initiate the refund to the original payment method. The final credit time depends on the payment gateway, bank, or card issuer.' },
+    { heading: '6. Contact', body: 'For cancellation, refund, or payment-related questions:\n\nTABLELY Support\nWebsite: https://www.tablely.in/\nEmail: support@tablely.in' },
+  ],
+};
+
 const safeString = (value: unknown, fallback: string) => typeof value === 'string' && value.trim() ? value : fallback;
 const safeStringArray = (value: unknown, fallback: string[]) => Array.isArray(value) ? value.map(String).map(x => x.trim()).filter(Boolean) : fallback;
 

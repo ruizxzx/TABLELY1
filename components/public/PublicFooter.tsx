@@ -12,6 +12,7 @@ export function PublicFooter() {
           <Link href="/vision">My Vision</Link>
           <Link href="/privacy">Privacy</Link>
           <Link href="/terms">Terms</Link>
+          <Link href="https://www.tablely.in/cancellation-refund-policy">Cancellation & Refund</Link>
           <Link href="/admin-access" className="footer-admin-link" aria-label="Platform admin">·</Link>
         </div>
       </div>

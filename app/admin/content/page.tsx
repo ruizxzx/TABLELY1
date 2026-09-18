@@ -2,13 +2,13 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { ArrowLeft, FileText, Mail, RefreshCw, UserRound } from 'lucide-react';
+import { ArrowLeft, FileText, Mail, RefreshCw, RotateCcw, UserRound } from 'lucide-react';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 
 type Row = { slug: string; title: string; is_published: boolean; version: number; updated_at: string; published_at: string };
-const labels: Record<string,string> = { contact: 'Contact', vision: 'My Vision', privacy: 'Privacy Policy', terms: 'Terms & Conditions' };
-const icons: Record<string, typeof Mail> = { contact: Mail, vision: UserRound, privacy: FileText, terms: FileText };
-const paths: Record<string,string> = { contact: '/contact', vision: '/vision', privacy: '/privacy', terms: '/terms' };
+const labels: Record<string,string> = { contact: 'Contact', vision: 'My Vision', privacy: 'Privacy Policy', terms: 'Terms & Conditions', 'cancellation-refund-policy': 'Cancellation & Refund Policy' };
+const icons: Record<string, typeof Mail> = { contact: Mail, vision: UserRound, privacy: FileText, terms: FileText, 'cancellation-refund-policy': RotateCcw };
+const paths: Record<string,string> = { contact: '/contact', vision: '/vision', privacy: '/privacy', terms: '/terms', 'cancellation-refund-policy': '/cancellation-refund-policy' };
 
 export default function AdminContentPage() {
   const supabase = getSupabaseBrowserClient();
