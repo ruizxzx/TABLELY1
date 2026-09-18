@@ -1,12 +1,28 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { Suspense, useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSearchParams } from 'next/navigation';
 import { Brand } from '@/components/Brand';
 import { getSupabaseBrowserClient, isSupabaseConfigured } from '@/lib/supabase';
 
 export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="auth-page">
+          <div className="auth-panel">
+            <div className="setup-loading">Loading…</div>
+          </div>
+        </main>
+      }
+    >
+      <ResetPasswordForm />
+    </Suspense>
+  );
+}
+
+function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get('next')?.startsWith('/') ? searchParams.get('next')! : '/dashboard';
