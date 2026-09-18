@@ -177,6 +177,7 @@ button:disabled { cursor: not-allowed; opacity: .58; }
 .orbit-two { width: 220px; height: 220px; border-color: #ded4c4; animation-direction: reverse; animation-duration: 16s; }
 .story-center { position: relative; z-index: 1; display: grid; justify-items: center; gap: 8px; width: 160px; height: 160px; align-content: center; border-radius: 50%; background: #183326; color: #fff; box-shadow: 0 20px 45px rgba(24,51,38,.22); }
 .story-center .brand-mark { width: 34px; height: 34px; }
+.story-center-logo { width: 44px; height: 36px; object-fit: contain; border-radius: 8px; }
 .story-center b { font-size: 14px; }
 .story-center small { color: #a9bdb0; font-size: 10px; }
 .story-chip { position: absolute; z-index: 2; display: inline-flex; align-items: center; gap: 7px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fffdf8; box-shadow: 0 10px 24px rgba(44,39,31,.08); color: #4b594f; font-size: 11px; font-weight: 700; }

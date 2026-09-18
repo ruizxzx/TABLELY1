@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ArrowRight, Check, ChefHat, LayoutDashboard, QrCode, Smartphone, BarChart3, Clock3, CreditCard, Sparkles, Zap, ShieldCheck, Users, UtensilsCrossed, TrendingUp } from 'lucide-react';
-import { Brand } from '@/components/Brand';
+import { Brand, PlatformLogo } from '@/components/Brand';
 import { getSupabaseServerClient } from '@/lib/supabase-server';
 import { PublicFooter } from '@/components/public/PublicFooter';
 
@@ -119,7 +119,7 @@ export default async function Home() {
       <section className="story-section">
         <div className="container story-grid">
           <div className="story-copy"><div className="eyebrow">A QUIETER WAY TO RUN SERVICE</div><h2>Your team should focus on <em>hospitality.</em></h2><p>Tablely takes repetitive ordering work off the floor, gives the kitchen a clear queue, and puts the numbers owners need in one calm workspace.</p><div className="story-list"><span><ShieldCheck size={17}/> One source of truth for the whole restaurant</span><span><Sparkles size={17}/> A polished guest experience from scan to receipt</span><span><LayoutDashboard size={17}/> Control every branch as you grow</span></div></div>
-          <div className="story-visual"><div className="story-orbit orbit-one" /><div className="story-orbit orbit-two" /><div className="story-center"><span className="brand-mark">T</span><b>One workspace</b><small>for every part of service</small></div><div className="story-chip chip-top"><QrCode size={15}/> Guest ordering</div><div className="story-chip chip-right"><ChefHat size={15}/> Kitchen clarity</div><div className="story-chip chip-bottom"><BarChart3 size={15}/> Owner insight</div></div>
+          <div className="story-visual"><div className="story-orbit orbit-one" /><div className="story-orbit orbit-two" /><div className="story-center"><PlatformLogo className="story-center-logo" alt="" /><b>One workspace</b><small>for every part of service</small></div><div className="story-chip chip-top"><QrCode size={15}/> Guest ordering</div><div className="story-chip chip-right"><ChefHat size={15}/> Kitchen clarity</div><div className="story-chip chip-bottom"><BarChart3 size={15}/> Owner insight</div></div>
         </div>
       </section>
 
