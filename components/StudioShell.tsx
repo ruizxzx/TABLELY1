@@ -22,6 +22,7 @@ import {
   ReceiptText,
   Settings,
   Building2,
+  BookOpen,
 } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
@@ -45,6 +46,7 @@ const items = [
   { href: '/branches', label: 'Branches', Icon: Building2, roles: ['OWNER'] },
   { href: '/dashboard/subscription', label: 'Subscription', Icon: CreditCard, roles: ['OWNER', 'MANAGER'] },
   { href: '/settings', label: 'Settings', Icon: Settings, roles: ['OWNER', 'MANAGER'] },
+  { href: '/help', label: 'Help & Guides', Icon: BookOpen, roles: ['OWNER', 'MANAGER', 'WAITER', 'KITCHEN'] },
 ];
 
 // Fine-grained permission required to see a nav item, checked only for
@@ -328,6 +330,7 @@ export function StudioShell({ children }: { children: ReactNode }) {
             <span className="topbar-divider" />
             <span>{restaurantName} · {branchName}</span>
           </div>
+          <Link href="/help" className="topbar-help-link" aria-label="Open Help & Guides" title="Help & Guides"><BookOpen size={17} /></Link>
           <RealtimeNotificationCenter />
           <div className="topbar-user">
             <div className="avatar avatar-small">{userName.slice(0, 2).toUpperCase()}</div>
