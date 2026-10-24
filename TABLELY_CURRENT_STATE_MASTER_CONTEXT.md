@@ -69,6 +69,34 @@ The project is **not starting from Build 1 again**.
 
 All future work starts from the current live architecture and must preserve the completed functionality above.
 
+**Repository note (2026-10-24):** The source package includes migrations/documentation through Builds 20.2 and 21–26, plus Build 27 source changes described in Section 16. The repository files are not evidence that those migrations are present in the live Supabase database. The live database remains the deployment authority.
+
+---
+
+## Build 28 repository source changes (2026-10-24)
+
+The repository now includes **Build 28 — Smart Onboarding & QR 2.0** source changes:
+
+- Menu import preview and draft commit for CSV, XLSX, searchable PDF text and optional AI-assisted image/PDF extraction.
+- Private import file storage and branch-scoped import history.
+- Resumable owner onboarding for restaurant details, main branch, branding, menu, tables, payments and launch.
+- Razorpay API credential test that does not create a payment; webhook delivery remains a separate verification step.
+- Stable UUID-backed table QR destination at `/q/{publicQrId}`, resolving to the existing customer route.
+- Branded QR card PNG and browser print-to-PDF workflows.
+
+### Build 28 preservation rules
+
+- Existing `/r/{slug}/table/{table_code}` QR URLs remain supported.
+- A QR scan alone must not create a persistent customer session.
+- Imported menu records remain unavailable drafts until an authorized user explicitly activates them.
+- Only the uploader or restaurant owner may finalize a menu import; menu-management permission is also required.
+- Existing restaurant-specific Razorpay credential encryption and payment flows remain the source of truth.
+- The payment setup test validates API credentials only; it does not validate actual webhook delivery or take a payment.
+- The new QR resolver checks table, branch and organization active state before redirecting.
+- Existing restaurants are marked as onboarded by the new migration to avoid disrupting current workspaces.
+
+Build 28's migration is `202610240004_build28_smart_onboarding_qr_menu_import.sql`. It is included in the repository only; no remote database migration has been executed by this source package. See `BUILD28_GUIDE.md` for supported file formats, environment settings, limits and known extraction/printing constraints.
+
 ---
 
 # 3. CURRENT AUTHORITATIVE STATE
@@ -1245,3 +1273,36 @@ Use the following block as the operational instruction for a future AI coding ag
 > Every implementation must include regression testing for all affected existing functionality.
 >
 > When finished, report exactly what was changed, what was preserved, what was tested, and any remaining limitation.
+
+---
+
+# 16. BUILD 27 — STABILITY & TECHNICAL FOUNDATION (SOURCE BASELINE)
+
+Build 27 source changes are present in this repository. They have **not** been applied to a remote Supabase database and have not been deployed.
+
+## Implemented in the repository
+
+- Dashboard summary now obtains branch-local business-day revenue/order metrics from `get_branch_dashboard_metrics`, rather than deriving revenue from a 50-order preview. The recent-order list remains capped at 50 for display only.
+- Revenue summary uses payment transaction records where available, with compatibility fallback to legacy orders already marked paid/refunded.
+- Dashboard metric access reuses `current_user_has_permission_for_branch(..., 'ANALYTICS')`.
+- Payment validation helpers convert amounts to integer paise and require matching provider order ID, amount and INR currency.
+- Checkout verification and webhook handling only finalize captured payments; webhook failure snapshots are re-fetched from Razorpay before applying a failure transition.
+- Legacy order-first and payment-attempt checkout flows have server-side order-creation leases to reduce duplicate provider order creation under concurrent requests.
+- Legacy online settlement is performed by an atomic SECURITY DEFINER RPC that locks the order, validates status/order/token/amount/currency, records the transaction and settles once.
+- `payment_transactions` has RLS enabled and direct browser-role table access revoked. Existing service-role/SECURITY DEFINER workflows remain the intended write path.
+- Unit and migration-integrity tests for payment validation, SQL security contracts and timestamp uniqueness are under `tests/`. Run `npm test` and `npm run check:migrations`.
+
+## Preserved session model
+
+`lib/customer.ts` already uses a tab-specific `window.name` context rather than treating cloned `sessionStorage` as the customer identity. Build 27 leaves this implementation unchanged. See `_qa/BUILD27_REGRESSION_TEST_MATRIX.md` for browser scenarios still requiring execution.
+
+## Migration and deployment gate
+
+- New stability migration: `supabase/migrations/202610240001_build27_stability_foundation.sql`.
+- The historical `202609180031` timestamp collision is resolved in the local repository: the global-brand SQL is replayed under `202610240002`, and the cross-organization checkout-charge patch is replayed idempotently under `202610240003`.
+- The target project's `supabase_migrations.schema_migrations` ledger was not available. Inspect it before deployment, then validate the full local chain on a disposable/staging database.
+- Do not assume the presence of a migration file means the live database has applied it.
+
+## Verification state
+
+See `BUILD27_COMPLETION_REPORT.md`. Local source validation and Node unit tests are distinct from database, browser, Razorpay sandbox and production verification. Do not report a remote or production pass without actually running those checks.

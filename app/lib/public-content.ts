@@ -1,0 +1,3 @@
+import { getAdminSupabase } from './server-admin';
+export type PublicContent={slug:string;title:string;seo_title:string;seo_description:string;content:any;updated_at?:string;published_version?:number};
+export async function getPublishedContent(slug:string):Promise<PublicContent|null>{try{const {data,error}=await getAdminSupabase().from('sellora_public_content').select('slug,title,seo_title,seo_description,published_content,updated_at,published_version').eq('slug',slug).eq('published',true).maybeSingle();if(error)throw error;return data?{...data,content:data.published_content}:null;}catch{return null;}}

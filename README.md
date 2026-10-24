@@ -1,6 +1,8 @@
-# TABLELY — Stable Build 19.4 + Build 20.1 Baseline
+# TABLELY — Current Code Baseline (Builds 1–26 + Builds 27–28 source changes)
 
-This package is the frozen code baseline for future TABLELY development.
+This package contains the TABLELY source baseline through Builds 1–26, with Build 27 stability changes and Build 28 Smart Onboarding & QR 2.0 source changes. Migration files are repository history; they are not proof that every migration is applied in the live Supabase project. Build 27 and Build 28 migrations must be reconciled with the target project's live migration history before deployment.
+
+Build 29 payment reconciliation and split-billing staging work is documented in [BUILD29_GUIDE.md](BUILD29_GUIDE.md) and [BUILD29_COMPLETION_REPORT.md](BUILD29_COMPLETION_REPORT.md). Its migration is source-only and has not been applied to a live database.
 
 ## Important
 
@@ -42,6 +44,8 @@ Do not treat every new session as proof that an older customer has left; shared-
 ```powershell
 npm.cmd install
 npm.cmd run typecheck
+npm.cmd test
+npm.cmd run check:migrations
 npm.cmd run build
 npm.cmd run dev
 ```
@@ -69,4 +73,4 @@ Before applying a DB change, inspect the existing live state. Afterward, verify 
 - `create_payment_attempt_for_table_v18`
 - `finalize_payment_attempt_v18`
 
-See `TABLELY_CURRENT_STATE_MASTER_CONTEXT.md` for the full preservation and development rules.
+See `TABLELY_CURRENT_STATE_MASTER_CONTEXT.md` for the full preservation and development rules. See `BUILD27_COMPLETION_REPORT.md` for Build 27 implementation status and verification limits. See `BUILD28_GUIDE.md` for the menu importer, onboarding, Razorpay setup and permanent QR implementation, environment configuration and validation limits. See `_qa/BUILD27_REGRESSION_TEST_MATRIX.md` for the Build 27 regression matrix.

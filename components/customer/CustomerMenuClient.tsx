@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Search, Plus, Leaf, Flame, Star, Languages, Tag, ArrowRight } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { CustomerFrame } from './CustomerLayout';
-import { cartStorageKey, getPublicMenu, getPublicTableContext, getPublicActiveOffers, type PublicCouponOffer, type PublicMenuItem, type CartItem, readCart, saveCart, saveCouponCode, formatMoney } from '@/lib/customer';
+import { cartStorageKey, getPublicMenu, getPublicMenuLanguageSettings, getPublicTableContext, getPublicActiveOffers, type PublicCouponOffer, type PublicMenuItem, type CartItem, readCart, saveCart, saveCouponCode, formatMoney } from '@/lib/customer';
 
 export default function CustomerMenuClient({ restaurantSlug, tableCode }: { restaurantSlug: string; tableCode: string }) {
   const [context, setContext] = useState<Awaited<ReturnType<typeof getPublicTableContext>> | null>(null);
@@ -12,7 +12,7 @@ export default function CustomerMenuClient({ restaurantSlug, tableCode }: { rest
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
   const [language, setLanguage] = useState('en');
-  useEffect(()=>{try{setLanguage(localStorage.getItem(`tablely:language:${tableCode}`)||'en')}catch{/* ignore storage access */}},[tableCode]);
+  const [languageSettings, setLanguageSettings] = useState({ defaultLanguage: 'en', enabledLanguages: ['en'] });
   const [cart, setCart] = useState<CartItem[]>([]);
   const [offers, setOffers] = useState<PublicCouponOffer[]>([]);
   const [usedOffer, setUsedOffer] = useState('');
@@ -22,10 +22,14 @@ export default function CustomerMenuClient({ restaurantSlug, tableCode }: { rest
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getPublicTableContext(tableCode), getPublicMenu(tableCode)])
-      .then(([table, rows]) => {
+    Promise.all([getPublicTableContext(tableCode), getPublicMenu(tableCode), getPublicMenuLanguageSettings(tableCode)])
+      .then(([table, rows, settings]) => {
         if (cancelled) return;
         if (table.restaurant_slug !== restaurantSlug) throw new Error('This QR does not belong to this restaurant.');
+        let savedLanguage = '';
+        try { savedLanguage = localStorage.getItem(`tablely:language:${tableCode}`) ?? ''; } catch {}
+        const selectedLanguage = settings.enabledLanguages.includes(savedLanguage) ? savedLanguage : settings.defaultLanguage;
+        setLanguageSettings(settings); setLanguage(selectedLanguage);
         setContext(table); setMenu(rows); setCart(readCart(tableCode));
       })
       .catch((err: unknown) => { if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load this table.'); })
@@ -76,7 +80,7 @@ export default function CustomerMenuClient({ restaurantSlug, tableCode }: { rest
       {offers.length ? <section className="customer-offer-strip" aria-label="Active offers">{offers.map(offer => <div className="customer-offer" key={offer.id}><Tag size={17}/><div><strong>{offer.title}</strong><span>{offer.discount_type==='PERCENTAGE'?`${offer.discount_value}% OFF`:`₹${offer.discount_value} OFF`} · Min {formatMoney(Number(offer.minimum_order_amount))}{offer.code?` · Code ${offer.code}`:''}</span></div><button type="button" className="customer-add" onClick={()=>{saveCouponCode(tableCode,offer.code);setUsedOffer(offer.code);}}>{usedOffer===offer.code?'Applied':'Use offer'}</button></div>)}</section> : null}
       <div className="customer-menu-toolbar">
         <div className="customer-search-wrap"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search food, drinks…" aria-label="Search menu"/></div>
-        <label className="customer-language-picker"><Languages size={16}/><select value={language} onChange={e=>{setLanguage(e.target.value);try{localStorage.setItem(`tablely:language:${tableCode}`,e.target.value)}catch{/* ignore storage access */}}} aria-label="Language"><option value="en">English</option><option value="bn">বাংলা</option><option value="hi">हिन्दी</option></select></label>
+        {languageSettings.enabledLanguages.length>1?<label className="customer-language-picker"><Languages size={16}/><select value={language} onChange={e=>{setLanguage(e.target.value);try{localStorage.setItem(`tablely:language:${tableCode}`,e.target.value)}catch{/* ignore storage access */}}} aria-label="Language">{languageSettings.enabledLanguages.map(code=><option key={code} value={code}>{code==='hi'?'Hindi':code==='bn'?'Bengali':'English'}</option>)}</select></label>:null}
       </div>
       <div className="customer-categories" role="tablist" aria-label="Menu categories"><button className={category==='all'?'active':''} onClick={()=>setCategory('all')}>All</button>{categories.map(item=><button className={category===item.category_id?'active':''} key={item.category_id} onClick={()=>setCategory(item.category_id)}>{displayCategory(item)}</button>)}</div>
       <div className="customer-menu-grid">{items.map(item=><article className={`customer-food-card ${item.is_available?'':'unavailable'}`} key={item.item_id}>

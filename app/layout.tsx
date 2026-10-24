@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
+import './premium.css';
 import { getSupabaseServerClient } from '@/lib/supabase-server';
 import { PlatformBrandRuntime } from '@/components/PlatformBrandRuntime';
 import { Analytics } from '@vercel/analytics/next';

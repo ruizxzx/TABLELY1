@@ -23,11 +23,14 @@ import {
   Settings,
   Building2,
   BookOpen,
+  MessageCircle,
+  MoreHorizontal,
 } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 import { Brand } from './Brand';
 import { RealtimeNotificationCenter } from './RealtimeNotificationCenter';
+import { CustomerChatInbox } from './customer/CustomerChatInbox';
 
 const items = [
   { href: '/dashboard', label: 'Overview', Icon: LayoutDashboard, roles: ['OWNER', 'MANAGER'] },
@@ -37,12 +40,16 @@ const items = [
   { href: '/menu', label: 'Menu', Icon: UtensilsCrossed, roles: ['OWNER', 'MANAGER'] },
   { href: '/kitchen', label: 'Kitchen', Icon: ChefHat, roles: ['OWNER', 'MANAGER', 'KITCHEN'] },
   { href: '/service-requests', label: 'Service', Icon: BellRing, roles: ['OWNER', 'MANAGER', 'WAITER'] },
+  { href: '/customer-messages', label: 'Customer messages', Icon: MessageCircle, roles: ['OWNER', 'MANAGER', 'WAITER'] },
   { href: '/payments', label: 'Payments', Icon: CreditCard, roles: ['OWNER', 'MANAGER'] },
+  { href: '/payments/split-bills', label: 'Split bills', Icon: ReceiptText, roles: ['OWNER', 'MANAGER'] },
   { href: '/staff', label: 'Staff', Icon: Users, roles: ['OWNER', 'MANAGER'] },
   { href: '/customers', label: 'Customers', Icon: UserRoundSearch, roles: ['OWNER', 'MANAGER'] },
   { href: '/bills', label: 'Bills', Icon: ReceiptText, roles: ['OWNER', 'MANAGER', 'WAITER'] },
   { href: '/analytics', label: 'Analytics', Icon: BarChart3, roles: ['OWNER', 'MANAGER'] },
   { href: '/reviews', label: 'Reviews', Icon: Star, roles: ['OWNER', 'MANAGER'] },
+  { href: '/customer-engagement', label: 'Customer engagement', Icon: MessageCircle, roles: ['OWNER', 'MANAGER'] },
+  { href: '/support', label: 'Support Centre', Icon: MessageCircle, roles: ['OWNER', 'MANAGER'] },
   { href: '/branches', label: 'Branches', Icon: Building2, roles: ['OWNER'] },
   { href: '/dashboard/subscription', label: 'Subscription', Icon: CreditCard, roles: ['OWNER', 'MANAGER'] },
   { href: '/settings', label: 'Settings', Icon: Settings, roles: ['OWNER', 'MANAGER'] },
@@ -56,6 +63,7 @@ const PERMISSION_FOR_HREF: Record<string, string> = {
   '/staff': 'STAFF_MANAGEMENT',
   '/customers': 'EDIT_ORDERS',
   '/payments': 'PAYMENTS',
+  '/payments/split-bills': 'PAYMENTS',
   '/analytics': 'ANALYTICS',
   '/menu': 'MENU_MANAGEMENT',
   '/bills': 'BILLING',
@@ -233,6 +241,22 @@ export function StudioShell({ children }: { children: ReactNode }) {
     router.refresh();
   }
 
+  const visibleNavItems = items
+    .filter((item) => item.roles.includes(role))
+    .filter((item) => item.href !== '/service-requests' || entitlements.SERVICE_REQUESTS)
+    .filter((item) => item.href !== '/payments' || entitlements.PAYMENT_TRACKING)
+    .filter((item) => item.href !== '/analytics' || entitlements.ANALYTICS)
+    .filter((item) => {
+      if (role !== 'MANAGER' || !permissions) return true;
+      const required = PERMISSION_FOR_HREF[item.href];
+      return !required || permissions[required] === true;
+    });
+  const preferredMobileHrefs = ['/orders', '/tables', '/kitchen', '/service-requests'];
+  const mobileNavItems = [
+    ...preferredMobileHrefs.flatMap((href) => visibleNavItems.filter((item) => item.href === href)),
+    ...visibleNavItems,
+  ].filter((item, index, all) => all.findIndex((candidate) => candidate.href === item.href) === index).slice(0, 4);
+
   // Re-resolve the branch logo whenever the branding studio saves a change
   // (org default or this branch's override), so the sidebar/topbar reflect
   // it immediately without a full reload.
@@ -278,6 +302,9 @@ export function StudioShell({ children }: { children: ReactNode }) {
       <aside className={`sidebar ${open ? 'sidebar-open' : ''} ${collapsed ? 'sidebar-collapsed' : ''}`}>
         <div className="sidebar-head">
           <Brand light />
+          <button type="button" className="icon-button mobile-only sidebar-mobile-collapse" aria-label="Collapse navigation" title="Collapse navigation" onClick={() => { setCollapsed(true); setOpen(false); }}>
+            <PanelLeftClose size={18} />
+          </button>
           <button className="icon-button mobile-only sidebar-mobile-close" aria-label="Close navigation" title="Close navigation" onClick={() => setOpen(false)}>
             <X size={18} />
           </button>
@@ -292,17 +319,10 @@ export function StudioShell({ children }: { children: ReactNode }) {
           </div>
         </div>
         <nav className="side-nav" aria-label="Restaurant navigation">
-          {items.filter((item) => item.roles.includes(role)).filter((item) => item.href !== '/service-requests' || entitlements.SERVICE_REQUESTS).filter((item) => item.href !== '/payments' || entitlements.PAYMENT_TRACKING).filter((item) => item.href !== '/analytics' || entitlements.ANALYTICS).filter((item) => {
-            // Fine-grained permission gate: Owners always see everything;
-            // Managers only see items their staff_permissions allow. Waiter/
-            // Kitchen nav is already fully gated above by can_waiter/can_kitchen.
-            if (role !== 'MANAGER' || !permissions) return true;
-            const required = PERMISSION_FOR_HREF[item.href];
-            return !required || permissions[required] === true;
-          }).map(({ href, label, Icon }) => {
+          {visibleNavItems.map(({ href, label, Icon }) => {
             const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(`${href}/`));
             return (
-              <Link key={href} href={href} className={active ? 'active' : ''} onClick={() => setOpen(false)}>
+              <Link key={href} href={href} className={active ? 'active' : ''} title={collapsed ? label : undefined} aria-label={collapsed ? label : undefined} onClick={() => setOpen(false)}>
                 <Icon size={17} />
                 <span>{label}</span>
               </Link>
@@ -321,8 +341,15 @@ export function StudioShell({ children }: { children: ReactNode }) {
           <button className="icon-button desktop-only sidebar-topbar-toggle" aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} onClick={() => setCollapsed((v) => !v)}>
             {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
           </button>
-          <button className="icon-button mobile-only" aria-label="Open navigation" title="Open navigation" onClick={() => setOpen(true)}>
-            <Menu size={19} />
+          <button className="icon-button mobile-only" aria-label={collapsed ? 'Expand navigation' : 'Open navigation'} title={collapsed ? 'Expand navigation' : 'Open navigation'} onClick={() => {
+            if (collapsed) {
+              setCollapsed(false);
+              setOpen(true);
+            } else {
+              setOpen(true);
+            }
+          }}>
+            {collapsed ? <PanelLeftOpen size={18} /> : <Menu size={19} />}
           </button>
           <div className="topbar-context">
             <span className="status-dot" />
@@ -331,6 +358,7 @@ export function StudioShell({ children }: { children: ReactNode }) {
             <span>{restaurantName} · {branchName}</span>
           </div>
           <Link href="/help" className="topbar-help-link" aria-label="Open Help & Guides" title="Help & Guides"><BookOpen size={17} /></Link>
+          {['OWNER', 'MANAGER', 'WAITER'].includes(role) ? <CustomerChatInbox /> : null}
           <RealtimeNotificationCenter />
           <div className="topbar-user">
             <div className="avatar avatar-small">{userName.slice(0, 2).toUpperCase()}</div>
@@ -342,6 +370,21 @@ export function StudioShell({ children }: { children: ReactNode }) {
         </header>
         <main className="content">{children}</main>
       </section>
+      <nav className="studio-mobile-nav" aria-label="Primary navigation">
+        {mobileNavItems.map(({ href, label, Icon }) => {
+          const active = pathname === href || (href !== '/dashboard' && pathname.startsWith(`${href}/`));
+          return (
+            <Link key={href} href={href} className={active ? 'active' : ''} aria-current={active ? 'page' : undefined}>
+              <Icon size={19} strokeWidth={active ? 2.3 : 1.9} />
+              <span>{label}</span>
+            </Link>
+          );
+        })}
+        <button type="button" aria-label="More navigation options" aria-expanded={open} onClick={() => { setCollapsed(false); setOpen(true); }}>
+          <MoreHorizontal size={20} />
+          <span>More</span>
+        </button>
+      </nav>
     </div>
   );
 }

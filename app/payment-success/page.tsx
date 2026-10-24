@@ -1,0 +1,2 @@
+import {redirect} from 'next/navigation';
+export default async function PaymentSuccess({searchParams}:{searchParams:Promise<{id?:string;token?:string}>}){const{id,token}=await searchParams;if(id&&token)redirect(`/payment-success/${encodeURIComponent(id)}?token=${encodeURIComponent(token)}`);return <main className="success"><div className="card success-card"><div className="pill">Payment status</div><h1 style={{fontFamily:'Space Grotesk'}}>Order link required</h1><p className="muted">Open the secure payment-success link returned after verification.</p></div></main>}

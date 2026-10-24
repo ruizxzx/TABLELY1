@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "strict": true,
+    "skipLibCheck": true,
+    "types": [],
+    "outDir": "../.tmp-bento-test"
+  },
+  "files": [
+    "../app/lib/bento.ts",
+    "../app/lib/bento-hub.ts",
+    "./bento-regression.ts",
+    "./bento-build19-regression.ts",
+    "./bento-build20-regression.ts"
+  ]
+}

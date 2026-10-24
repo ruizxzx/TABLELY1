@@ -1,0 +1,4 @@
+-- Compatibility marker: the fresh baseline already contains the Build 3
+-- function execute hardening required before this migration version.
+-- This file intentionally performs no additional schema changes so the local
+-- migration history remains aligned with the live Sellora project.

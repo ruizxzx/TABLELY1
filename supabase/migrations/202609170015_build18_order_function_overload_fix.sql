@@ -1,0 +1,42 @@
+-- Fix: "Could not choose the best candidate function between:
+--   create_order_for_table_v18(... 8 params ...)
+--   create_order_for_table_v18(... 10 params, +p_session_token, +p_device_token ...)"
+--
+-- Root cause: 202609170014_build18_coupon_record_field_fix.sql re-created
+-- create_order_for_table_v18 with `create or replace function`, using the
+-- 8-parameter signature from the original Build 18 migration
+-- (202609170011). `create or replace` only replaces a function with an
+-- IDENTICAL parameter signature -- it does not touch or remove a
+-- differently-shaped overload. Your live database already had a second,
+-- 10-parameter overload (adding p_session_token, p_device_token) that is
+-- not defined anywhere in this project's migration files -- it must have
+-- been applied directly against the database outside of this codebase.
+-- So after 202609170014 ran, both overloads existed side by side, and
+-- Postgres could no longer tell which one a named-parameter call should
+-- resolve to.
+--
+-- IMPORTANT -- please read before running this:
+-- This migration only removes the 8-parameter overload (the one this
+-- project's own migrations created) so only the pre-existing 10-parameter
+-- version remains. It does NOT recreate a 10-parameter version, because
+-- its actual logic is not present in any file in this project -- I cannot
+-- see what p_session_token / p_device_token do, and recreating it blind
+-- risks silently dropping real security/fraud-prevention logic your
+-- database already has.
+--
+-- If your 10-parameter version does NOT already contain the v_coupon.id
+-- fix from 202609170014, you will see the "record has no field id" /
+-- "not assigned yet" errors again, because that overload was never
+-- patched -- only the 8-parameter one was. In that case, tell me and
+-- share (or let me read) the live 10-parameter function's actual body --
+-- e.g. via `\sf public.create_order_for_table_v18` in psql, or a fresh
+-- pg_dump / schema export -- so I can apply the same v_coupon.coupon_id
+-- fix to the real, currently-live version instead of guessing at it.
+--
+-- Same applies to create_payment_attempt_for_table_v18 if it has a
+-- similar unexpected overload in your live database -- check for the
+-- same ambiguous-function error there and let me know if so.
+
+drop function if exists public.create_order_for_table_v18(text,jsonb,text,text,text,text,text,text);
+
+select pg_notify('pgrst','reload schema');

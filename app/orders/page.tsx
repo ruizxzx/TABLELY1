@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Clock3, RefreshCw, X, Banknote, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
+import { CalendarDays, Clock3, RefreshCw, X, Banknote, ChevronDown, ChevronUp, RotateCcw, MessageCircle } from 'lucide-react';
 import { StudioShell } from '@/components/StudioShell';
 import { SectionHeader } from '@/components/SectionHeader';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -11,6 +11,8 @@ import { removeById, uniqueById, upsertById } from '@/lib/live-ops';
 import { toLiveStatus, type LiveStatus } from '@/lib/realtime';
 import { OrderCancellationRequests } from '@/components/OrderCancellationRequests';
 import { ORDER_STATES, type OrderState, type Priority, formatElapsed } from '@/lib/restaurant-ops';
+import { SessionManagementPanel } from '@/components/orders/SessionManagementPanel';
+import { getLocalDateInputValue, getOrderDateBounds, type OrderDatePreset, type OrderDateRange } from '@/lib/order-date-range';
 
 interface OrderRow {
   id:string; order_number:number|null; table_id:string; table_session_id:string|null; branch_id:string; status:OrderState;
@@ -20,6 +22,7 @@ interface OrderRow {
 }
 interface ItemRow { id:string; order_id:string; item_name_snapshot:string; unit_price:number; quantity:number; selected_addons:Array<{name:string;price?:number}>|null; selected_options:Array<{type:string;name:string;price_delta?:number}>|null; special_instructions:string|null; preparation_status:string|null; station_id:string|null; priority:Priority; }
 interface Station { id:string; name:string; is_active:boolean; }
+interface CustomerChatConversation { id:string; table_id:string; table_session_id:string|null; table_number:number|null; unread_customer_count:number; last_message_at:string; }
 
 const rejectReasons = [
   ['ITEM_UNAVAILABLE','Item unavailable'],['KITCHEN_TOO_BUSY','Kitchen too busy'],['RESTAURANT_CLOSING','Restaurant closing'],
@@ -32,26 +35,38 @@ function optionLines(item:ItemRow){ const out:string[]=[]; for(const x of item.s
 export default function OrdersPage(){
  const supabase=getSupabaseBrowserClient();
  const [rows,setRows]=useState<OrderRow[]>([]); const [tables,setTables]=useState<Record<string,number>>({}); const [items,setItems]=useState<Record<string,ItemRow[]>>({}); const [stations,setStations]=useState<Station[]>([]);
+ const [activeBranchId,setActiveBranchId]=useState<string|null>(null); const [canManageSessions,setCanManageSessions]=useState(false); const [requestedSessionId,setRequestedSessionId]=useState<string|null>(null);
+ const [chatConversations,setChatConversations]=useState<CustomerChatConversation[]>([]); const [chatError,setChatError]=useState<string|null>(null);
  const [loading,setLoading]=useState(true); const [refreshing,setRefreshing]=useState(false); const [error,setError]=useState<string|null>(null); const [filter,setFilter]=useState<'ALL'|OrderState>('ALL');
+ const [datePreset,setDatePreset]=useState<OrderDatePreset|'custom'>('today'); const [customFrom,setCustomFrom]=useState(getLocalDateInputValue); const [customTo,setCustomTo]=useState(getLocalDateInputValue); const [appliedDateLabel,setAppliedDateLabel]=useState('Today');
+ const orderDateFilterRef=useRef<OrderDateRange>({preset:'today'});
  const [liveStatus,setLiveStatus]=useState<LiveStatus>('connecting'); const liveRef=useRef<LiveStatus>('connecting'); const seq=useRef(0);
  const [rejectTarget,setRejectTarget]=useState<OrderRow|null>(null); const [rejectCode,setRejectCode]=useState('ITEM_UNAVAILABLE'); const [rejectNote,setRejectNote]=useState(''); const [busy,setBusy]=useState(false);
  const [settleOrder,setSettleOrder]=useState<OrderRow|null>(null); const [counterPaymentOrder,setCounterPaymentOrder]=useState<OrderRow|null>(null); const [expanded,setExpanded]=useState<Record<string,boolean>>({});
  const [reopenTarget,setReopenTarget]=useState<OrderRow|null>(null); const [reopenReason,setReopenReason]=useState('Customer requested an operational correction.');
 
+ async function loadCustomerChats(branchId:string){try{const response=await fetch(`/api/customer-messages?branchId=${encodeURIComponent(branchId)}`,{cache:'no-store'});const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.error??'Customer chat status could not be loaded.');setChatConversations((result.conversations??[]) as CustomerChatConversation[]);setChatError(null)}catch(e:unknown){setChatError(e instanceof Error?e.message:'Customer chat status could not be loaded.')}}
  async function load(silent=false){ const n=++seq.current; if(!supabase){setError('Supabase is not configured.');setLoading(false);return;} if(!silent)setRefreshing(true); try{
-   const c=await getCurrentRestaurantContext(supabase); if(!c.data)throw c.error??new Error('Workspace not found.'); const b=c.data.branch.id;
-   const [{data:o,error:oe},{data:t,error:te},{data:st,error:se}]=await Promise.all([
-     supabase.from('orders').select('id,order_number,table_id,table_session_id,branch_id,status,payment_status,payment_method,total,created_at,updated_at,customer_note,customer_name,customer_phone,cancellation_reason,cancelled_by,cancelled_at,payment_started_at,payment_expires_at,priority').eq('branch_id',b).order('created_at',{ascending:false}).limit(200),
+   const c=await getCurrentRestaurantContext(supabase); if(!c.data)throw c.error??new Error('Workspace not found.'); const b=c.data.branch.id;setActiveBranchId(b);setCanManageSessions(c.data.staff.role==='OWNER'||c.data.staff.role==='MANAGER');void loadCustomerChats(b);
+   const bounds=getOrderDateBounds(orderDateFilterRef.current); if(!bounds)throw new Error('Choose a valid order date range.');
+   const orderRows:OrderRow[]=[]; let orderOffset=0; let hasMoreOrders=true;
+   while(hasMoreOrders){const{data,error:orderError}=await supabase.from('orders').select('id,order_number,table_id,table_session_id,branch_id,status,payment_status,payment_method,total,created_at,updated_at,customer_note,customer_name,customer_phone,cancellation_reason,cancelled_by,cancelled_at,payment_started_at,payment_expires_at,priority').eq('branch_id',b).gte('created_at',bounds.from).lt('created_at',bounds.toExclusive).order('created_at',{ascending:false}).range(orderOffset,orderOffset+199);if(orderError)throw orderError;const page=data??[];orderRows.push(...page as OrderRow[]);hasMoreOrders=page.length===200;orderOffset+=page.length;}
+   const [{data:t,error:te},{data:st,error:se}]=await Promise.all([
      supabase.from('tables').select('id,table_number').eq('branch_id',b),
      supabase.from('kitchen_stations').select('id,name,is_active').eq('branch_id',b).order('sort_order'),
-   ]); if(oe)throw oe;if(te)throw te;if(se)throw se;
-   const ids=(o??[]).map(x=>x.id); let grouped:Record<string,ItemRow[]>={}; if(ids.length){const{data:it,error:ie}=await supabase.from('order_items').select('id,order_id,item_name_snapshot,unit_price,quantity,selected_addons,selected_options,special_instructions,preparation_status,station_id,priority').in('order_id',ids);if(ie)throw ie;for(const row of uniqueById((it??[]).map(x=>({...x,unit_price:Number(x.unit_price)})) as ItemRow[]))(grouped[row.order_id]??=[]).push(row);}
-   if(n!==seq.current)return; setRows((o??[]).map(x=>({...x,total:Number(x.total),priority:(x.priority??'NORMAL') as Priority})) as OrderRow[]);setItems(grouped);setTables(Object.fromEntries((t??[]).map(x=>[x.id,x.table_number])));setStations((st??[]) as Station[]);setError(null);setLoading(false);
+   ]); if(te)throw te;if(se)throw se;
+   const ids=orderRows.map(x=>x.id); let grouped:Record<string,ItemRow[]>={};
+   for(let start=0;start<ids.length;start+=200){const batch=ids.slice(start,start+200);let itemOffset=0;let hasMoreItems=true;while(hasMoreItems){const{data:it,error:ie}=await supabase.from('order_items').select('id,order_id,item_name_snapshot,unit_price,quantity,selected_addons,selected_options,special_instructions,preparation_status,station_id,priority').in('order_id',batch).range(itemOffset,itemOffset+199);if(ie)throw ie;const itemPage=it??[];for(const row of uniqueById(itemPage.map(x=>({...x,unit_price:Number(x.unit_price)})) as ItemRow[]))(grouped[row.order_id]??=[]).push(row);hasMoreItems=itemPage.length===200;itemOffset+=itemPage.length;}}
+   if(n!==seq.current)return; setRows(orderRows.map(x=>({...x,total:Number(x.total),priority:(x.priority??'NORMAL') as Priority})));setItems(grouped);setTables(Object.fromEntries((t??[]).map(x=>[x.id,x.table_number])));setStations((st??[]) as Station[]);setError(null);setLoading(false);
  }catch(e:unknown){if(n===seq.current){setError(e instanceof Error?e.message:'Could not load orders.');setLoading(false)}}finally{if(n===seq.current)setRefreshing(false)} }
+ function chooseDatePreset(value:OrderDatePreset|'custom'){setDatePreset(value);if(value==='custom')return;orderDateFilterRef.current={preset:value};setAppliedDateLabel(value==='today'?'Today':value==='7days'?'Last 7 days':'Last 30 days');void load();}
+ function applyCustomDateRange(){const range:OrderDateRange={preset:'custom',from:customFrom,to:customTo};if(!getOrderDateBounds(range))return;orderDateFilterRef.current=range;setAppliedDateLabel(`${customFrom} – ${customTo}`);void load();}
  useEffect(()=>{void load()},[]);
+ useEffect(()=>{const onChatUpdate=(event:Event)=>{const detail=(event as CustomEvent<{conversations?:CustomerChatConversation[]}>).detail;if(detail?.conversations)setChatConversations(detail.conversations)};window.addEventListener('tablely-customer-chat-inbox-changed',onChatUpdate);return()=>window.removeEventListener('tablely-customer-chat-inbox-changed',onChatUpdate)},[]);
  useEffect(()=>{if(!supabase)return;let ch:ReturnType<typeof supabase.channel>|null=null;let active=true;const timer=window.setInterval(()=>{if(liveRef.current!=='live')void load(true)},20000);
    (async()=>{const c=await getCurrentRestaurantContext(supabase);if(!c.data||!active)return;const b=c.data.branch.id;ch=supabase.channel(`tablely:orders-v2:${b}`)
-   .on('postgres_changes',{event:'*',schema:'public',table:'orders',filter:`branch_id=eq.${b}`},p=>{const o={...(p.new as OrderRow),total:Number((p.new as OrderRow)?.total)};if(p.eventType==='DELETE')setRows(cur=>removeById(cur,(p.old as OrderRow).id));else setRows(cur=>upsertById(cur,{...o,priority:(o.priority??'NORMAL') as Priority}));})
+   .on('postgres_changes',{event:'*',schema:'public',table:'orders',filter:`branch_id=eq.${b}`},p=>{const o={...(p.new as OrderRow),total:Number((p.new as OrderRow)?.total)};if(p.eventType==='DELETE')setRows(cur=>removeById(cur,(p.old as OrderRow).id));else setRows(cur=>upsertById(cur,{...o,priority:(o.priority??'NORMAL') as Priority}));void load(true);})
+   .on('postgres_changes',{event:'*',schema:'public',table:'table_sessions',filter:`branch_id=eq.${b}`},()=>void load(true))
    .on('postgres_changes',{event:'*',schema:'public',table:'order_items'},p=>{const row=p.new as ItemRow;if(p.eventType==='DELETE'){setItems(cur=>{const next={...cur,[String((p.old as ItemRow).order_id)]: (cur[String((p.old as ItemRow).order_id)]??[]).filter(i=>i.id!==(p.old as ItemRow).id)};return next;});}else if(row?.order_id)setItems(cur=>({...cur,[row.order_id]:upsertById(cur[row.order_id]??[],{...row,unit_price:Number(row.unit_price),priority:(row.priority??'NORMAL') as Priority})}));})
    .subscribe(status=>{const s=toLiveStatus(status);liveRef.current=s;setLiveStatus(s);if(s==='live')void load(true)});})();
    return()=>{active=false;window.clearInterval(timer);if(ch)void supabase.removeChannel(ch)};
@@ -65,17 +80,26 @@ export default function OrdersPage(){
  async function setStation(item:ItemRow,stationId:string){if(!supabase)return;try{const{error:e}=await supabase.rpc('set_order_item_station',{p_order_item_id:item.id,p_station_id:stationId || null});if(e)throw e;void load(true)}catch(e:unknown){setError(e instanceof Error?e.message:'Could not assign station.')}}
  async function reopen(){if(!supabase||!reopenTarget)return;setBusy(true);try{const{error:e}=await supabase.rpc('reopen_order',{p_order_id:reopenTarget.id,p_reason:reopenReason});if(e)throw e;setReopenTarget(null);void load(true)}catch(e:unknown){setError(e instanceof Error?e.message:'Could not reopen order.')}finally{setBusy(false)}}
  const visible=useMemo(()=>filter==='ALL'?rows:rows.filter(o=>o.status===filter),[rows,filter]);
+ const customDateRangeValid=Boolean(getOrderDateBounds({preset:'custom',from:customFrom,to:customTo}));
  const liveLabel=liveStatus==='live'?'Live':liveStatus==='offline'?'Offline':'Reconnecting';
  if(loading)return <StudioShell><div className="setup-loading">Loading restaurant orders…</div></StudioShell>;
  return <StudioShell>
    <SectionHeader eyebrow="ORDERS / OPERATIONS 2.0" title="Orders" description="Full lifecycle, per-item preparation, rejection, priority, payment state, and table-session context." action={<button className="button button-light" onClick={()=>void load()} disabled={refreshing}><RefreshCw size={15} className={refreshing?'spin':''}/> Refresh</button>}/>
    <div className="live-status"><span className={`status-dot ${liveStatus==='live'?'online':'offline'}`}/>{liveLabel}<span className="muted-small">· realtime order and item updates</span></div>
    {error?<div className="notice notice-error" role="alert">{error}</div>:null}
+   {chatError?<div className="notice notice-error" role="alert">{chatError}</div>:null}
+   {activeBranchId&&canManageSessions?<SessionManagementPanel branchId={activeBranchId} requestedSessionId={requestedSessionId} onSessionHandled={()=>setRequestedSessionId(null)}/>:null}
+   <div className="orders-date-controls" aria-label="Order date filters">
+     <label className="orders-date-preset"><CalendarDays size={16}/><span>Date range</span><select aria-label="Filter orders by date" value={datePreset} onChange={e=>chooseDatePreset(e.target.value as OrderDatePreset|'custom')}><option value="today">Today</option><option value="7days">Last 7 days</option><option value="30days">Last 30 days</option><option value="custom">Custom range</option></select></label>
+     {datePreset==='custom'?<div className="orders-custom-range"><label>From<input aria-label="Order start date" type="date" value={customFrom} max={customTo||undefined} onChange={e=>setCustomFrom(e.target.value)}/></label><label>To<input aria-label="Order end date" type="date" value={customTo} min={customFrom||undefined} onChange={e=>setCustomTo(e.target.value)}/></label><button type="button" className="button button-primary compact" onClick={applyCustomDateRange} disabled={!customDateRangeValid||refreshing}>Apply</button>{!customDateRangeValid?<span className="orders-date-error" role="alert">Choose a valid date range.</span>:null}</div>:null}
+     <span className="orders-range-caption">Showing orders: <strong>{appliedDateLabel}</strong></span>
+   </div>
    <div className="status-tabs">{statuses.map(([value,label])=><button key={value} className={filter===value?'active':''} onClick={()=>setFilter(value as typeof filter)}>{label} · {value==='ALL'?rows.length:rows.filter(o=>o.status===value).length}</button>)}</div>
    <OrderCancellationRequests />
    <section className="order-card-grid">
-     {visible.map(o=>{const open=expanded[o.id]===true;const its=items[o.id]??[];return <article className="surface-card live-order-card ops-order-card" key={o.id}>
-       <div className="live-order-head"><div><strong>#{o.order_number??o.id.slice(0,6)} · Table {tables[o.table_id]??'—'}</strong><span><Clock3 size={12}/> {formatElapsed(o.created_at)} · Session {o.table_session_id?.slice(0,8).toUpperCase()??'—'}</span></div><StatusBadge status={o.status}/></div>
+     {visible.map(o=>{const open=expanded[o.id]===true;const its=items[o.id]??[];const matchingChats=chatConversations.filter(chat=>o.table_session_id!==null&&chat.unread_customer_count>0&&chat.table_session_id===o.table_session_id);const unreadMessages=matchingChats.reduce((count,chat)=>count+chat.unread_customer_count,0);const latestChat=matchingChats[0];return <article className="surface-card live-order-card ops-order-card" key={o.id}>
+       <div className="live-order-head"><div><strong>#{o.order_number??o.id.slice(0,6)} · Table {tables[o.table_id]??'—'}</strong><span><Clock3 size={12}/> <time dateTime={o.created_at} title={new Date(o.created_at).toLocaleString()}>{new Date(o.created_at).toLocaleString([], {dateStyle:'medium',timeStyle:'short'})}</time> · {formatElapsed(o.created_at)} ago · {o.table_session_id?<button type="button" className="ops-session-link" onClick={()=>setRequestedSessionId(o.table_session_id)}>Session {o.table_session_id.slice(0,8).toUpperCase()}</button>:'No linked session'}</span></div><StatusBadge status={o.status}/></div>
+       {unreadMessages>0&&latestChat?<button type="button" className="ops-chat-alert" aria-label={`${unreadMessages} new customer message${unreadMessages===1?'':'s'} for Table ${tables[o.table_id]??'—'}`} onClick={()=>window.dispatchEvent(new CustomEvent('tablely-open-customer-chat',{detail:{conversationId:latestChat.id}}))}><MessageCircle size={14}/><strong>{unreadMessages} new message{unreadMessages===1?'':'s'}</strong><span>Open live chat</span></button>:null}
        <div className="ops-order-meta"><span>Payment: <b>{humanPayment(o.payment_method,o.payment_status)}</b></span><span className={`ops-priority ops-priority-${o.priority.toLowerCase()}`}>{o.priority}</span><span>{its.length} item{its.length===1?'':'s'}</span><strong>₹{Number(o.total).toLocaleString('en-IN')}</strong></div>
        {o.customer_name?<div className="muted-small">Customer: {o.customer_name}{o.customer_phone?` · ${o.customer_phone}`:''}</div>:null}
        {o.customer_note?<div className="order-note">{o.customer_note}</div>:null}

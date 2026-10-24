@@ -6,12 +6,13 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
   const next = searchParams.get('next') || '/dashboard';
+  const signInPath = next.startsWith('/partners') ? '/partners/login' : '/login';
 
-  if (!code) return NextResponse.redirect(`${origin}/login?error=missing_auth_code`);
+  if (!code) return NextResponse.redirect(`${origin}${signInPath}?error=missing_auth_code`);
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const supabaseKey = (process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)?.trim();
   if (!supabaseUrl || !supabaseKey || supabaseKey.startsWith('sb_secret_')) {
-    return NextResponse.redirect(`${origin}/login?error=supabase_not_configured`);
+    return NextResponse.redirect(`${origin}${signInPath}?error=supabase_not_configured`);
   }
 
   const cookieStore = await cookies();
@@ -29,7 +30,7 @@ export async function GET(request: Request) {
   );
 
   const { error } = await supabase.auth.exchangeCodeForSession(code);
-  if (error) return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`);
+  if (error) return NextResponse.redirect(`${origin}${signInPath}?error=auth_callback_failed`);
 
   if (next.startsWith('/customer') || next.startsWith('/r/')) {
     const { data: userData } = await supabase.auth.getUser();

@@ -7,6 +7,13 @@ import { ArrowLeft, Loader2, ShieldAlert } from 'lucide-react';
 import { Brand } from '@/components/Brand';
 import { getSupabaseBrowserClient, isSupabaseConfigured } from '@/lib/supabase';
 
+function getRequestError(reason: unknown) {
+  if (reason instanceof TypeError && reason.message.toLowerCase().includes('fetch')) {
+    return 'Could not reach Supabase. Check your internet connection and the Supabase project URL/status, then try again.';
+  }
+  return reason instanceof Error ? reason.message : 'Could not complete the sign-in request.';
+}
+
 export default function AdminAccessPage() {
   return (
     <Suspense fallback={<main className="auth-page"><div className="auth-panel"><div className="setup-loading">Loading…</div></div></main>}>
@@ -33,15 +40,25 @@ function AdminAccessPageContent() {
     async function redirectExistingAdmin() {
       const supabase = getSupabaseBrowserClient();
       if (!supabase) { setCheckingSession(false); return; }
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || cancelled) { setCheckingSession(false); return; }
-      const { data: isAdmin } = await supabase.rpc('is_platform_admin');
-      if (cancelled) return;
-      if (isAdmin) {
-        router.replace(next.startsWith('/admin') ? next : '/admin');
-        return;
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        if (cancelled) return;
+        if (!session?.user) { setCheckingSession(false); return; }
+        const { data: isAdmin, error: adminError } = await supabase.rpc('is_platform_admin');
+        if (adminError) throw adminError;
+        if (cancelled) return;
+        if (isAdmin) {
+          router.replace(next.startsWith('/admin') ? next : '/admin');
+          return;
+        }
+        setCheckingSession(false);
+      } catch (reason) {
+        if (!cancelled) {
+          setError(getRequestError(reason));
+          setCheckingSession(false);
+        }
       }
-      setCheckingSession(false);
     }
     void redirectExistingAdmin();
     return () => { cancelled = true; };
@@ -57,32 +74,44 @@ function AdminAccessPageContent() {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) return;
     setBusy(true);
+    let signedIn = false;
+    try {
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) {
+        setError(signInError.message);
+        return;
+      }
+      signedIn = true;
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-    if (signInError) {
-      setBusy(false);
-      setError(signInError.message);
-      return;
-    }
+      const { data: isAdmin, error: adminCheckError } = await supabase.rpc('is_platform_admin');
+      if (adminCheckError) {
+        setError(adminCheckError.message);
+        await supabase.auth.signOut();
+        return;
+      }
+      if (!isAdmin) {
+        setError('That account does not have Super Admin access.');
+        // Do not leave a signed-in, non-admin session sitting on this page.
+        await supabase.auth.signOut();
+        return;
+      }
 
-    const { data: isAdmin, error: adminCheckError } = await supabase.rpc('is_platform_admin');
-    if (adminCheckError) {
+      router.replace(next.startsWith('/admin') ? next : '/admin');
+      router.refresh();
+    } catch (reason) {
+      const requestError = getRequestError(reason);
+      setError(requestError);
+      if (signedIn) {
+        try {
+          const { error: signOutError } = await supabase.auth.signOut();
+          if (signOutError) setError(`${requestError} The temporary session could not be cleared; reload this page before continuing.`);
+        } catch {
+          setError(`${requestError} The temporary session could not be cleared; reload this page before continuing.`);
+        }
+      }
+    } finally {
       setBusy(false);
-      setError(adminCheckError.message);
-      await supabase.auth.signOut();
-      return;
     }
-    if (!isAdmin) {
-      setBusy(false);
-      setError('That account does not have Super Admin access.');
-      // Do not leave a signed-in, non-admin session sitting on this page.
-      await supabase.auth.signOut();
-      return;
-    }
-
-    setBusy(false);
-    router.replace(next.startsWith('/admin') ? next : '/admin');
-    router.refresh();
   }
 
   if (checkingSession) {

@@ -43,6 +43,7 @@ export default function CustomerOrderClient({ restaurantSlug, tableCode, orderTo
   const [cancelMessage, setCancelMessage] = useState<string | null>(null);
   const [retryBusy, setRetryBusy] = useState<'PAY_NOW' | 'PAY_AT_COUNTER' | null>(null);
   const [retryError, setRetryError] = useState<string | null>(null);
+  const [engagementLinks, setEngagementLinks] = useState<{ feedbackUrl: string | null; reviewUrl: string | null }>({ feedbackUrl: null, reviewUrl: null });
   const loadSeq = useRef(0);
   const connectedRef = useRef(false);
 
@@ -90,6 +91,22 @@ export default function CustomerOrderClient({ restaurantSlug, tableCode, orderTo
 
   const order = rows[0];
   const items = useMemo(() => rows.filter((row) => row.item_name), [rows]);
+  useEffect(() => {
+    let active = true;
+    setEngagementLinks({ feedbackUrl: null, reviewUrl: null });
+    if (!order || order.status !== 'COMPLETED' || order.payment_status !== 'PAID') return () => { active = false; };
+    const params = new URLSearchParams({ orderId: order.order_id, trackingToken: orderToken });
+    void fetch(`/api/customer-engagement/order?${params}`, { cache: 'no-store' })
+      .then(async (response) => {
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.error || 'Could not load customer follow-up links.');
+        if (active) setEngagementLinks({ feedbackUrl: body.feedbackUrl ?? null, reviewUrl: body.reviewUrl ?? null });
+      })
+      .catch(() => {
+        if (active) setEngagementLinks({ feedbackUrl: null, reviewUrl: null });
+      });
+    return () => { active = false; };
+  }, [order?.order_id, order?.status, order?.payment_status, orderToken]);
   const awaitingOnlinePayment = Boolean(order && order.status === 'NEW' && order.payment_status === 'PENDING' && (order.payment_method === 'PAY_NOW' || order.payment_method?.startsWith('PAY_NOW:')));
   const awaitingCounterPayment = Boolean(order && order.status === 'NEW' && order.payment_status === 'PENDING' && order.payment_method === 'PAY_AT_COUNTER');
   const awaitingPayment = awaitingOnlinePayment || awaitingCounterPayment;
@@ -195,6 +212,7 @@ export default function CustomerOrderClient({ restaurantSlug, tableCode, orderTo
   return <CustomerFrame restaurantName={context.restaurant_name} tableNumber={context.table_number} tableCode={context.table_code} restaurantSlug={context.restaurant_slug}>
     <div className="customer-content customer-order-page">
       <div className="customer-order-success"><div className="customer-checkmark">{awaitingPayment ? <CreditCard size={26}/> : <Check size={26} />}</div><span className="customer-eyebrow">ORDER #{order.order_number}</span><h1>{awaitingCounterPayment ? 'Awaiting counter payment.' : awaitingOnlinePayment ? 'Awaiting payment.' : 'Order placed.'}</h1><p>{awaitingCounterPayment ? 'Pay at the counter now to start your order. The restaurant cannot prepare it until payment is confirmed.' : awaitingOnlinePayment ? 'Complete online payment to confirm your order. The restaurant cannot prepare this order until payment succeeds.' : 'Your kitchen has received the order. This page updates automatically.'}</p><span className="muted-small">{connected ? 'Live updates enabled' : 'Reconnecting to live updates'}</span></div>
+      {order.status === 'COMPLETED' && order.payment_status === 'PAID' && (engagementLinks.feedbackUrl || engagementLinks.reviewUrl) ? <section className="customer-order-card" aria-label="Share your experience"><div className="customer-payment-heading"><h2>Share your experience</h2><span>Your choice</span></div><p className="muted-small">Your honest feedback is welcome. You can contact the restaurant privately or share your experience on Google. Both options are voluntary.</p><div className="button-row">{engagementLinks.feedbackUrl ? <Link className="customer-secondary-button" href={engagementLinks.feedbackUrl}>Give private feedback</Link> : null}{engagementLinks.reviewUrl ? <a className="customer-secondary-button" href={engagementLinks.reviewUrl}>View Google review link</a> : null}</div></section> : null}
       <div className="customer-order-card"><div className="customer-order-card-head"><div><span>Table {order.table_number}</span><small><Clock3 size={12} /> {new Date(order.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</small></div><button className="customer-refresh" onClick={() => void load()} aria-label="Refresh order"><RefreshCw size={15} /></button></div>{awaitingPayment ? <div className="customer-checkout-card"><div className="customer-payment-heading"><h2>{awaitingCounterPayment ? 'Awaiting counter payment' : 'Payment pending'}</h2><span>{awaitingCounterPayment ? 'Pay now to start' : order.payment_expires_at ? `Expires ${new Date(order.payment_expires_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : 'Up to 1 hour'}</span></div><p className="muted-small">{awaitingCounterPayment ? 'Your order remains NEW until the counter payment is confirmed.' : 'The restaurant cannot accept, prepare, cancel, or complete this PAY_NOW order until payment succeeds.'}</p></div> : <div className="customer-timeline">{steps.map((step, index) => <div className={`customer-timeline-row ${index <= currentIndex ? 'done' : ''} ${index === currentIndex ? 'current' : ''}`} key={step}><div className="customer-timeline-icon">{index < currentIndex ? <Check size={14} /> : index === currentIndex ? <Circle size={12} fill="currentColor" /> : <span>{index + 1}</span>}</div><div><strong>{step === 'NEW' ? 'Order received' : step === 'ACCEPTED' ? 'Order Accepted' : step === 'PREPARING' ? 'Preparing your order' : step === 'READY' ? 'Order ready' : step === 'SERVED' ? 'Served at your table' : 'Completed'}</strong>{index === currentIndex ? <small>Current status</small> : null}</div></div>)}</div>}</div>
       <div className="customer-order-card"><div className="customer-payment-heading"><h2>Payment</h2><span>{paymentLabel(order.payment_method, order.payment_status)}</span></div><div className="customer-order-charge-row"><span>Method</span><span>{order.payment_method ?? '—'}</span></div><div className="customer-order-charge-row"><span>Status</span><span>{order.payment_status}</span></div></div>
       <div className="customer-order-card"><div className="customer-payment-heading"><h2>Your items</h2><span>{formatMoney(Number(order.total))}</span></div>{items.map((item) => <div className="customer-order-item" key={item.item_id}><span>{item.quantity} × {item.item_name}{item.selected_options?.length?<small>{item.selected_options.map(x=>x.type==='VARIANT'?`Size: ${x.name}`:x.name).join(', ')}</small>:item.selected_addons?.length?<small>{item.selected_addons.map(x=>x.name).join(', ')}</small>:null}</span><b>{formatMoney(Number(item.line_total))}</b></div>)}<div className="customer-order-charges"><div className="customer-order-charge-row"><span>Subtotal</span><span>{formatMoney(Number(order.subtotal))}</span></div>{Number(order.discount) > 0 ? <div className="customer-order-charge-row"><span>Discount</span><span>-{formatMoney(Number(order.discount))}</span></div> : null}{(order.charge_breakdown ?? []).filter((c) => Number(c.amount) > 0).map((c) => <div className="customer-order-charge-row" key={c.name}><span>{c.name}{c.calculation_type === 'PERCENT' ? ` (${c.value}%)` : ''}</span><span>{formatMoney(Number(c.amount))}</span></div>)}</div><div className="customer-order-total"><span>Total</span><strong>{formatMoney(Number(order.total))}</strong></div></div>
