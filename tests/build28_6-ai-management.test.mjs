@@ -31,6 +31,25 @@ test('menu extraction uses database routing and keeps legacy env as fallback onl
  assert.match(service,/estimated_cost:cost/);
 });
 
+test('menu translation shares the menu extraction route and logs usage under translation',async()=>{
+ const service=await read('lib/ai-management.ts'),route=await read('app/api/menu/translations/route.ts'),customerRoute=await read('app/api/customer/menu-translations/route.ts');
+ assert.match(service,/executeConfiguredTextFeature\('menu_translation'[\s\S]*?'menu_extraction'\)/);
+ assert.match(service,/eq\('feature_key',routingFeatureKey\)/);
+ assert.match(service,/feature_key:featureKey/);
+ assert.match(service,/\.in\('feature_key',usageFeatureKeys\)/);
+ assert.match(service,/Translate the provided restaurant menu text/);
+ assert.match(route,/resolveServerRestaurantAccess/);
+ assert.match(route,/restaurant_language_settings/);
+ assert.match(route,/executeMenuTranslation/);
+ assert.match(route,/ignoreDuplicates: !parsed\.data\.refreshAll/);
+ assert.match(route,/refreshAll/);
+ assert.match(route,/nextCursor/);
+ assert.match(customerRoute,/status: 410/);
+ const adminPage=await read('app/admin/ai-management/page.tsx');
+ assert.match(adminPage,/menu_translation/);
+ assert.match(adminPage,/menu translations in Hindi and Bengali use the Menu extraction route/i);
+});
+
 test('custom AI endpoints reject cleartext HTTP and private IP targets',async()=>{
  const service=await read('lib/ai-management.ts');
  assert.match(service,/Provider endpoints must use HTTPS/);

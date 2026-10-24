@@ -4,6 +4,80 @@ import { readFile } from 'node:fs/promises';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
+test('onboarding keeps menu setup in the wizard and records added or skipped progress', async () => {
+  const page = await read('app/onboarding/page.tsx');
+  const progress = await read('app/api/onboarding/progress/route.ts');
+  assert.match(page, /async function addMenuCategory/);
+  assert.match(page, /async function addMenuItem/);
+  assert.match(page, /from\('menu_items'\)\.insert/);
+  assert.match(page, /branch_id: context\.branch\.id/);
+  assert.match(page, /await saveProgress\(4, 4\)/);
+  assert.match(page, /async function goBack/);
+  assert.match(page, /Go back/);
+  assert.doesNotMatch(page, /openMenuPage|\/menu\/import\?from=onboarding|\/menu\?from=onboarding/);
+  assert.match(progress, /skippedSteps/);
+  assert.match(progress, /body\.skippedStep/);
+  assert.match(progress, /completed\.includes\(step\) \|\| skipped\.includes\(step\)/);
+});
+
+test('onboarding imports reviewed AI menu drafts without leaving setup', async () => {
+  const page = await read('app/onboarding/page.tsx');
+  assert.match(page, /async function parseMenuImport/);
+  assert.ok(page.includes("fetch('/api/menu-import/parse'"));
+  assert.match(page, /async function commitMenuImport/);
+  assert.ok(page.includes("fetch('/api/menu-import/commit'"));
+  assert.match(page, /await saveProgress\(4, 4\)/);
+  assert.match(page, /inactive drafts/);
+});
+
+test('customer language selection stores Hindi and Bengali translations for database reuse', async () => {
+  const page = await read('components/customer/CustomerMenuClient.tsx');
+  const product = await read('components/customer/CustomerProductClient.tsx');
+  const customerRoute = await read('app/api/customer/menu-translations/route.ts');
+  const dashboardRoute = await read('app/api/menu/translations/route.ts');
+  const dashboard = await read('app/menu/page.tsx');
+  const onboarding = await read('app/onboarding/page.tsx');
+  const translationClient = await read('lib/menu-translations-client.ts');
+  const service = await read('lib/ai-management.ts');
+  assert.match(page, /setMenu\(await getPublicMenu\(tableCode\)\)/);
+  assert.doesNotMatch(page, /api\/customer\/menu-translations/);
+  assert.match(product, /g\.translations\?\?\[\]\)\.find/);
+  assert.ok(page.includes("enabledLanguages: [...new Set([...settings.enabledLanguages, 'en', 'hi', 'bn'])]"));
+  assert.match(customerRoute, /status: 410/);
+  assert.match(dashboard, /prepareBranchTranslations/);
+  assert.match(dashboard, /syncMenuTranslations/);
+  assert.match(dashboardRoute, /resolveServerRestaurantAccess\(\{ branchId: parsed\.data\.branchId, permission: 'MENU_MANAGEMENT' \}\)/);
+  assert.match(dashboardRoute, /executeMenuTranslation/);
+  assert.match(dashboardRoute, /ignoreDuplicates: !parsed\.data\.refreshAll/);
+  assert.match(dashboardRoute, /refreshAll/);
+  assert.match(dashboardRoute, /nextCursor/);
+  assert.match(dashboard, /Sync Hindi & Bengali/);
+  assert.match(onboarding, /Sync Hindi & Bengali translations/);
+  assert.match(translationClient, /refreshAll/);
+  assert.match(translationClient, /nextCursor/);
+  for (const translationTable of ['menu_subcategory_translations','menu_variant_translations','modifier_group_translations','modifier_translations']) assert.ok(dashboardRoute.includes(translationTable));
+  assert.match(service, /executeConfiguredTextFeature\('menu_translation'/);
+  assert.match(service, /feature_key:featureKey,provider_id:provider\.id/);
+  const publicMenuMigration = await read('supabase/migrations/20261024140000_build32_public_variant_translations.sql');
+  assert.match(publicMenuMigration, /menu_variant_translations/);
+  assert.match(publicMenuMigration, /'translations',\(select coalesce\(jsonb_agg/);
+  assert.match(publicMenuMigration, /jsonb_agg\(jsonb_build_object\('id',mg\.id[\s\S]*?order by mig\.sort_order,mg\.sort_order,mg\.name\)\s+from public\.menu_item_modifier_groups mig/);
+});
+
+test('menu text edits invalidate stored Hindi and Bengali translations for dashboard refresh', async () => {
+  const migration = await read('supabase/migrations/20261025010100_build32_refresh_menu_translations.sql');
+  for (const trigger of [
+    'menu_category_translation_source_changed',
+    'menu_subcategory_translation_source_changed',
+    'menu_item_translation_source_changed',
+    'menu_variant_translation_source_changed',
+    'modifier_group_translation_source_changed',
+    'modifier_translation_source_changed',
+  ]) assert.match(migration, new RegExp(`create trigger ${trigger}`));
+  assert.match(migration, /language_code in \(\$2, \$3\)/);
+  assert.match(migration, /using new\.id, 'hi', 'bn'/);
+});
+
 test('Build 32 migration creates tenant-keyed engagement records with RLS enabled', async () => {
   const sql = await read('supabase/migrations/20261024030000_build32_customer_engagement_retention.sql');
   for (const table of ['restaurant_whatsapp_connections','restaurant_customer_preferences','restaurant_loyalty_ledger','restaurant_customer_feedback','restaurant_google_reviews']) assert.match(sql, new RegExp(`create table if not exists public\\.${table}`));

@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { ArrowRight, Check, CheckCircle2, Clock3, CreditCard, Image as ImageIcon, Loader2, LogOut, MapPin, Palette, QrCode, Store, Upload, Utensils } from 'lucide-react';
+import { ArrowRight, Check, CheckCircle2, Clock3, CreditCard, Image as ImageIcon, Languages, Loader2, LogOut, MapPin, Palette, QrCode, Store, Upload, Utensils } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Brand } from '@/components/Brand';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 import { getCurrentRestaurantContext, type CurrentRestaurantContext } from '@/lib/restaurant-context';
 import { removeBrandLogo, uploadBrandLogo, validateLogoImage } from '@/lib/brand-assets';
+import { syncMenuTranslations } from '@/lib/menu-translations-client';
 
 const STEPS = [
   { title: 'Restaurant', description: 'Create your restaurant workspace.' },
@@ -29,6 +30,7 @@ export default function OnboardingPage() {
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState(1);
   const [context, setContext] = useState<CurrentRestaurantContext | null>(null);
+  const [menuTranslationStatus, setMenuTranslationStatus] = useState('');
   const [completed, setCompleted] = useState<number[]>([]);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
@@ -252,6 +254,26 @@ export default function OnboardingPage() {
     finally { setBusy(false); }
   }
 
+  async function syncOnboardingMenuTranslations() {
+    if (!context) return;
+    if (!window.confirm('Regenerate every Hindi and Bengali menu translation now? This will replace existing AI and manually edited translations for this branch.')) return;
+    setBusy(true); setError(null); setNotice(null); setMenuTranslationStatus('Syncing all Hindi and Bengali menu translations...');
+    try {
+      const result = await syncMenuTranslations(context.branch.id, {
+        refreshAll: true,
+        onProgress: (language, remaining) => setMenuTranslationStatus(
+          `Syncing ${language === 'hi' ? 'Hindi' : 'Bengali'} translations...${remaining > 0 ? ` ${remaining} remaining.` : ''}`,
+        ),
+      });
+      setMenuTranslationStatus(`${result.translated} Hindi and Bengali menu translations refreshed and saved.`);
+      setNotice('Updated translations are saved with this menu and will be reused for customers.');
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : 'Could not sync menu translations.';
+      setMenuTranslationStatus(`Translation sync failed: ${message}`);
+      setError(message);
+    } finally { setBusy(false); }
+  }
+
   async function signOut() {
     if (!supabase) return;
     setBusy(true);
@@ -318,6 +340,9 @@ export default function OnboardingPage() {
   if (step === 4) return shell(<>
     <div className="onboarding-v2-icon"><Utensils size={22} /></div><span className="eyebrow">STEP 04 · MENU</span><h1>Bring your menu into TABLELY.</h1><p className="onboarding-v2-lead">Import a PDF, spreadsheet or menu image, review every extracted item, or build the menu manually.</p>
     <div className="onboarding-v2-choice"><div><Upload size={20} /><strong>Import an existing menu</strong><span>PDF, XLSX, CSV or image. Extracted items stay inactive until you activate them.</span><Link className="button button-primary" href="/menu/import?from=onboarding" onClick={(event) => { event.preventDefault(); void openMenuPage('/menu/import?from=onboarding'); }}>Open menu importer <ArrowRight size={15} /></Link></div><div><Utensils size={20} /><strong>Create menu manually</strong><span>Add categories, dishes, prices, modifiers and variants in the existing menu manager.</span><Link className="button button-light" href="/menu?from=onboarding" onClick={(event) => { event.preventDefault(); void openMenuPage('/menu?from=onboarding'); }}>Open menu manager <ArrowRight size={15} /></Link></div></div>
+    {menuTranslationStatus ? <div className="notice notice-info" role="status">{menuTranslationStatus}</div> : null}
+    <button type="button" className="button button-light" disabled={busy || !context} aria-busy={busy && menuTranslationStatus.startsWith('Syncing')} onClick={() => void syncOnboardingMenuTranslations()}>{busy && menuTranslationStatus.startsWith('Syncing') ? <><Loader2 size={15} className="spin" /> Syncing translations...</> : <><Languages size={15} /> Sync Hindi &amp; Bengali translations</>}</button>
+    <p className="onboarding-v2-foot">This regenerates the full menu and replaces existing saved Hindi/Bengali translations, including manual edits.</p>
     <div className="onboarding-v2-actions"><button className="button button-light" onClick={() => void continueMenu()} disabled={busy}>Set up menu later</button><button className="button button-primary" onClick={() => void continueMenu()} disabled={busy}>Continue <ArrowRight size={16} /></button></div>
   </>);
 
