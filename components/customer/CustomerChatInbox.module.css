@@ -1,0 +1,508 @@
+.root {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.trigger {
+  position: relative;
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.trigger:hover {
+  border-color: var(--line);
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.count {
+  position: absolute;
+  top: -4px;
+  right: -5px;
+  display: grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  padding: 0 4px;
+  border: 2px solid var(--surface);
+  border-radius: 999px;
+  background: #c63f35;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.panel {
+  position: fixed;
+  z-index: 100;
+  top: 68px;
+  right: 18px;
+  display: flex;
+  width: min(780px, calc(100vw - 36px));
+  height: min(620px, calc(100dvh - 86px));
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: 0 24px 70px rgba(19, 30, 24, .2);
+}
+
+.backdrop {
+  display: none;
+}
+
+.header {
+  display: flex;
+  min-height: 62px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.header > div:first-child,
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.header > div:first-child {
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.header strong {
+  font-size: 14px;
+}
+
+.header small,
+.conversation small,
+.threadHeader small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.headerActions {
+  flex: 0 0 auto;
+}
+
+.body {
+  display: grid;
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(190px, .75fr) minmax(0, 1.25fr);
+}
+
+.list {
+  min-height: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--line);
+}
+
+.conversation {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+
+.conversation:hover,
+.selected {
+  background: var(--surface-2);
+}
+
+.conversationTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.conversationTop strong {
+  font-size: 12px;
+}
+
+.conversationTop b {
+  display: grid;
+  min-width: 20px;
+  height: 20px;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #c63f35;
+  color: white;
+  font-size: 10px;
+}
+
+.preview {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation time {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.thread {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.threadHeader {
+  display: flex;
+  min-height: 49px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.backToConversations {
+  display: none;
+}
+
+.threadHeader strong {
+  font-size: 12px;
+}
+
+.messages {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  padding: 14px;
+}
+
+.message {
+  max-width: 88%;
+  align-self: flex-start;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 13px 13px 13px 4px;
+  background: var(--surface-2);
+}
+
+.staffMessage {
+  align-self: flex-end;
+  border-color: rgba(30, 90, 67, .16);
+  border-radius: 13px 13px 4px 13px;
+  background: rgba(30, 90, 67, .08);
+}
+
+.message span,
+.message time {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.message p {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.reply {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.reply textarea {
+  min-width: 0;
+  min-height: 42px;
+  max-height: 100px;
+  flex: 1 1 auto;
+  resize: vertical;
+  padding: 9px 11px;
+  font-size: 12px;
+}
+
+.reply button {
+  flex: 0 0 auto;
+}
+
+.empty {
+  margin: auto;
+  padding: 18px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.fullInbox {
+  padding: 10px 14px;
+  border-top: 1px solid var(--line);
+  color: var(--green-2);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.fullInbox:hover {
+  background: var(--surface-2);
+}
+
+.error {
+  padding: 8px 12px;
+  background: #fff1ef;
+  color: #8d3026;
+  font-size: 11px;
+}
+
+.toast {
+  position: fixed;
+  z-index: 120;
+  top: 72px;
+  right: 20px;
+  display: flex;
+  width: min(360px, calc(100vw - 32px));
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 12px 34px rgba(28, 32, 38, .16);
+  color: var(--green-2);
+}
+
+.toast > span {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.toast strong {
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.toast small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .trigger {
+    width: 44px;
+    height: 44px;
+  }
+
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 99;
+    display: block;
+    border: 0;
+    background: rgba(20, 24, 30, .24);
+  }
+
+  .root {
+    position: static;
+  }
+
+  .panel {
+    top: calc(64px + env(safe-area-inset-top));
+    right: 8px;
+    bottom: calc(62px + env(safe-area-inset-bottom));
+    left: 8px;
+    width: auto;
+    height: auto;
+    min-height: 260px;
+    border-radius: 18px;
+    box-shadow: 0 18px 56px rgba(19, 30, 24, .22);
+  }
+
+  .header {
+    min-height: 58px;
+    padding: 8px 12px;
+  }
+
+  .header strong {
+    font-size: 14px;
+  }
+
+  .headerActions {
+    gap: 6px;
+  }
+
+  .headerActions :global(.icon-button) {
+    width: 42px;
+    height: 42px;
+  }
+
+  .body {
+    position: relative;
+    display: block;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .list,
+  .thread {
+    width: 100%;
+    height: 100%;
+    border: 0;
+  }
+
+  .list {
+    overflow-y: auto;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .conversation {
+    gap: 5px;
+    padding: 12px 14px;
+  }
+
+  .conversationTop strong {
+    font-size: 13px;
+  }
+
+  .conversation small {
+    font-size: 10px;
+  }
+
+  .preview {
+    font-size: 12px;
+  }
+
+  .conversation time {
+    font-size: 10px;
+  }
+
+  .body[data-mobile-view="list"] .thread,
+  .body[data-mobile-view="thread"] .list {
+    display: none;
+  }
+
+  .threadHeader {
+    min-height: 58px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 7px 10px;
+  }
+
+  .threadHeader > div {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .threadHeader small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .backToConversations {
+    display: inline-flex;
+    min-width: 64px;
+    min-height: 42px;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--surface-2);
+    color: var(--green-2);
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .messages {
+    gap: 9px;
+    padding: 12px;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .message {
+    max-width: 88%;
+    padding: 10px 12px;
+  }
+
+  .reply {
+    align-items: flex-end;
+    gap: 7px;
+    padding: 8px;
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+    background: var(--surface);
+  }
+
+  .reply textarea {
+    min-height: 46px;
+    max-height: 108px;
+    padding: 11px;
+    font-size: 16px;
+  }
+
+  .reply button {
+    min-height: 46px;
+    padding: 0 12px;
+  }
+
+  .fullInbox {
+    min-height: 42px;
+    padding: 12px;
+  }
+
+  .conversation {
+    min-height: 82px;
+  }
+
+  .toast {
+    top: auto;
+    right: 10px;
+    bottom: calc(70px + env(safe-area-inset-bottom));
+    left: 10px;
+    width: auto;
+    z-index: 120;
+  }
+
+  .toast :global(.icon-button) {
+    width: 40px;
+    height: 40px;
+  }
+}

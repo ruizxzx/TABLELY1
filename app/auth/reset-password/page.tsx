@@ -88,7 +88,7 @@ function ResetPasswordForm() {
     }
     setMessage('Password updated. You can now sign in with the new password.');
     await s.auth.signOut();
-    window.setTimeout(() => router.replace(next.startsWith('/customer') ? `/customer/login?next=${encodeURIComponent(next)}` : '/login'), 900);
+    window.setTimeout(() => router.replace(next.startsWith('/customer') ? `/customer/login?next=${encodeURIComponent(next)}` : next.startsWith('/partners') ? '/partners/login' : '/login'), 900);
   }
 
   return (
@@ -97,7 +97,7 @@ function ResetPasswordForm() {
         <div className="auth-brand"><Brand /></div>
         <div className="eyebrow">ACCOUNT RECOVERY</div>
         <h1>Set a new password.</h1>
-        <p>Use this page only after opening the password-reset link sent to your staff login email.</p>
+        <p>Use this page only after opening the password-reset link sent to your account email.</p>
         {error ? <div className="notice notice-error" role="alert">{error}</div> : null}
         {message ? <div className="notice notice-info" role="status">{message}</div> : null}
         <form className="auth-form" onSubmit={submit}>

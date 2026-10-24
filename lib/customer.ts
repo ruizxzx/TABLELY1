@@ -293,6 +293,24 @@ export async function getPublicMenu(tableCode: string) {
   return (data ?? []) as PublicMenuItem[];
 }
 
+export async function getPublicMenuLanguageSettings(tableCode: string) {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const { data, error } = await supabase.rpc('get_public_menu_language_settings_for_table', { p_table_code: tableCode });
+  if (error) throw new Error(error.message);
+  if (!data || typeof data !== 'object') throw new Error('Could not load restaurant language settings.');
+  const settings = data as Record<string, unknown>;
+  const supported = new Set(['en', 'hi', 'bn']);
+  const enabledLanguages = Array.isArray(settings.enabledLanguages)
+    ? [...new Set(settings.enabledLanguages.filter((language): language is string => typeof language === 'string' && supported.has(language)))]
+    : [];
+  const defaultLanguage = typeof settings.defaultLanguage === 'string' && enabledLanguages.includes(settings.defaultLanguage)
+    ? settings.defaultLanguage
+    : enabledLanguages[0] ?? 'en';
+  if (!enabledLanguages.length) enabledLanguages.push(defaultLanguage);
+  return { defaultLanguage, enabledLanguages };
+}
+
 export async function createPublicOrder(args: {
   tableCode: string;
   items: CartItem[];

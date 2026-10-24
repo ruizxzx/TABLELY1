@@ -1,0 +1,17 @@
+{
+  "crons": [
+    { "path": "/api/cron/daily", "schedule": "0 3 * * *" }
+  ],
+  "headers": [
+    {
+      "source": "/bento-preview",
+      "headers": [
+        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com https://*.razorpay.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' https://*.supabase.co https://*.razorpay.com https://api.resend.com https://*.sentry.io; frame-src 'self' https://api.razorpay.com https://*.razorpay.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+        }
+      ]
+    }
+  ]
+}

@@ -52,6 +52,7 @@ export default async function Home() {
             <a href="#features">Features</a>
             <a href="#pricing">Pricing</a>
             <a href="#how">How it works</a>
+            <Link href="/partners">Partner program</Link>
             <Link href="/login">Login</Link>
             <Link className="button button-primary" href="/signup">Get started</Link>
           </div>
@@ -60,6 +61,7 @@ export default async function Home() {
           <a href="#features">Features</a>
           <a href="#pricing">Pricing</a>
           <a href="#how">How it works</a>
+          <Link className="mobile-partner-link" href="/partners#partner-apply">Earn as a partner <ArrowRight size={14} /></Link>
           <Link href="/login">Login</Link>
           <Link className="mobile-site-cta" href="/signup">Get started <ArrowRight size={14} /></Link>
         </div>
@@ -127,6 +129,27 @@ export default async function Home() {
         <div className="container story-grid">
           <div className="story-copy"><div className="eyebrow">A QUIETER WAY TO RUN SERVICE</div><h2>Your team should focus on <em>hospitality.</em></h2><p>Tablely takes repetitive ordering work off the floor, gives the kitchen a clear queue, and puts the numbers owners need in one calm workspace.</p><div className="story-list"><span><ShieldCheck size={17}/> One source of truth for the whole restaurant</span><span><Sparkles size={17}/> A polished guest experience from scan to receipt</span><span><LayoutDashboard size={17}/> Control every branch as you grow</span></div></div>
           <div className="story-visual"><div className="story-orbit orbit-one" /><div className="story-orbit orbit-two" /><div className="story-center"><PlatformLogo className="story-center-logo" alt="" /><b>One workspace</b><small>for every part of service</small></div><div className="story-chip chip-top"><QrCode size={15}/> Guest ordering</div><div className="story-chip chip-right"><ChefHat size={15}/> Kitchen clarity</div><div className="story-chip chip-bottom"><BarChart3 size={15}/> Owner insight</div></div>
+        </div>
+      </section>
+
+      <section className="partner-promo-section">
+        <div className="container">
+          <div className="partner-promo-card">
+            <div className="partner-promo-copy">
+              <div className="eyebrow">THE TABLELY PARTNER PROGRAM</div>
+              <h2>Know a restaurant ready to grow?</h2>
+              <p>Introduce restaurants to TABLELY, follow your referrals, and earn commission on eligible subscription payments. Apply online and manage everything in a dedicated partner portal.</p>
+              <div className="partner-promo-points">
+                <span><Check size={15} /> Track referral progress</span>
+                <span><Check size={15} /> See your commission ledger</span>
+                <span><Check size={15} /> Get a permanent referral link</span>
+              </div>
+            </div>
+            <div className="partner-promo-actions">
+              <Link href="/partners#partner-apply" className="button button-primary">Earn as a partner <ArrowRight size={16} /></Link>
+              <Link href="/partners" className="partner-promo-secondary">Explore the partner program</Link>
+            </div>
+          </div>
         </div>
       </section>
 

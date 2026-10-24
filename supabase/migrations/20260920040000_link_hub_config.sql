@@ -1,0 +1,1 @@
+alter table public.stores add column if not exists link_hub_config jsonb not null default '{"enabled": true, "title": "", "bio": "", "background": "#f5f1ea", "accent": "#d7653f", "buttonStyle": "solid", "links": [], "socialLinks": {}}'::jsonb;

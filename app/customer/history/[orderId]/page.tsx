@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 import { getPublicMenu, getPublicTableContext, saveCart, type CartItem, type PublicMenuItem } from '@/lib/customer';
 
-type OrderDetail = { order_id: string; order_number: number; restaurant_name: string; branch_name: string; created_at: string; status: string; payment_status: string; payment_method: string | null; total: number; review: { id: string; rating: number; comment: string | null; created_at: string } | null; items: Array<{ menu_item_id: string; item_name_snapshot: string; unit_price: number; quantity: number; selected_addons?: unknown; selected_options?: unknown }> };
+type OrderDetail = { order_id: string; order_number: number; restaurant_name: string; branch_name: string; created_at: string; status: string; payment_status: string; payment_method: string | null; total: number; review: { id: string; rating: number; comment: string | null; created_at: string } | null; items: Array<{ menu_item_id: string; item_name_snapshot: string; unit_price: number; quantity: number; selected_addons?: unknown; selected_options?: unknown; special_instructions?: string | null }> };
 
 export default function CustomerOrderDetailPage({ params }: { params: Promise<{ orderId: string }> }) {
   const [order, setOrder] = useState<OrderDetail | null>(null);
@@ -52,14 +52,34 @@ export default function CustomerOrderDetailPage({ params }: { params: Promise<{ 
       const current = new Map(menu.filter(item => item.item_id).map(item => [item.item_id as string, item]));
       const next: CartItem[] = [];
       const unavailable: string[] = [];
+      const changed: string[] = [];
       for (const item of order.items) {
         const live = current.get(item.menu_item_id) as PublicMenuItem | undefined;
         if (!live || !live.is_available || live.item_price === null) { unavailable.push(item.item_name_snapshot); continue; }
-        next.push({ menuItemId: item.menu_item_id, name: live.item_name ?? item.item_name_snapshot, price: Number(live.item_price), quantity: item.quantity, imageUrl: live.image_url, addons: [] });
+        const options = Array.isArray(item.selected_options) ? item.selected_options as Array<{ type?: string; id?: string; name?: string }> : [];
+        const variantOption = options.find(option => option.type === 'VARIANT');
+        if (!variantOption && live.variants?.some(option => option.is_available)) { changed.push(`${item.item_name_snapshot}: the current menu requires a variant selection.`); continue; }
+        const variant = variantOption ? live.variants?.find(option => option.id === variantOption.id && option.is_available) : undefined;
+        if (variantOption && !variant) { changed.push(`${item.item_name_snapshot}: previous variant is unavailable; choose a current variant from the menu.`); continue; }
+        const modifierOptions = options.filter(option => option.type === 'MODIFIER');
+        const allModifiers = (live.modifier_groups ?? []).flatMap(group => group.modifiers.map(modifier => ({ ...modifier, groupId: group.id, groupName: group.name })));
+        const modifiers = modifierOptions.map(option => {
+          const active = allModifiers.find(modifier => modifier.id === option.id && modifier.is_available);
+          return active ? { id: active.id, groupId: active.groupId, groupName: active.groupName, name: active.name, priceDelta: Number(active.price_delta) } : null;
+        });
+        if (modifiers.some(modifier => !modifier)) { changed.push(`${item.item_name_snapshot}: a previous modifier is no longer available; select current options from the menu.`); continue; }
+        const requiredWithoutChoice = (live.modifier_groups ?? []).some(group => group.is_required && !modifiers.some(modifier => modifier?.groupId === group.id));
+        if (requiredWithoutChoice) { changed.push(`${item.item_name_snapshot}: the menu now requires a new option; select it from the menu.`); continue; }
+        const oldAddons = Array.isArray(item.selected_addons) ? item.selected_addons as Array<{ name?: string }> : [];
+        const addons = oldAddons.map(old => live.addons?.find(addon => addon.name === old.name)).filter((addon): addon is NonNullable<typeof addon> => Boolean(addon)).map(addon => ({ name: addon.name, price: Number(addon.price) }));
+        if (oldAddons.length !== addons.length) { changed.push(`${item.item_name_snapshot}: a previous add-on is unavailable; review it from the menu.`); continue; }
+        const currentUnitPrice = Number(live.item_price) + Number(variant?.price_delta ?? 0) + modifiers.reduce((sum, modifier) => sum + Number(modifier?.priceDelta ?? 0), 0) + addons.reduce((sum, addon) => sum + addon.price, 0);
+        if (Math.abs(currentUnitPrice - Number(item.unit_price)) > 0.001) changed.push(`${item.item_name_snapshot}: current price is ₹${currentUnitPrice.toFixed(2)} (previously ₹${Number(item.unit_price).toFixed(2)}).`);
+        next.push({ menuItemId: item.menu_item_id, name: live.item_name ?? item.item_name_snapshot, price: Number(live.item_price), quantity: item.quantity, imageUrl: live.image_url, note: item.special_instructions ?? '', variant: variant ? { id: variant.id, name: variant.name, priceDelta: Number(variant.price_delta) } : undefined, modifiers: modifiers.filter((modifier): modifier is NonNullable<typeof modifier> => Boolean(modifier)), addons });
       }
       if (!next.length) throw new Error('None of the items from this order are currently available.');
       saveCart(tableCode.trim(), next);
-      setRepeatMessage(`${next.length} current menu item${next.length === 1 ? '' : 's'} added to your cart.${unavailable.length ? ` Unavailable: ${unavailable.join(', ')}.` : ''}`);
+      setRepeatMessage(`${next.length} item${next.length === 1 ? '' : 's'} rebuilt using today's menu and prices. Review the cart before checkout.${[...unavailable.map(name => `${name}: unavailable.`), ...changed].length ? ` ${[...unavailable.map(name => `${name}: unavailable.`), ...changed].join(' ')}` : ''}`);
       window.location.href = `/r/${encodeURIComponent(context.restaurant_slug)}/table/${encodeURIComponent(tableCode.trim())}/cart`;
     } catch (repeatError) {
       setRepeatMessage(repeatError instanceof Error ? repeatError.message : 'Could not repeat this order.');

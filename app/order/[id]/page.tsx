@@ -1,0 +1,21 @@
+import Link from 'next/link';
+import { getProductPath, getStorePath } from '../../lib/public-paths';
+import { notFound } from 'next/navigation';
+import { getAdminSupabase } from '../../lib/server-admin';
+import { verifyOrderAccessToken } from '../../lib/server-access';
+import { formatMoney } from '../../lib/format';
+import { getAppBaseUrl } from '../../lib/site';
+import RefundRequest from './RefundRequest';
+import DisputeRequest from './DisputeRequest';
+
+export const dynamic='force-dynamic';
+export default async function OrderPage({params,searchParams}:{params:Promise<{id:string}>;searchParams:Promise<{token?:string}>}){
+  const {id}=await params; const {token}=await searchParams;
+  if(!token||!verifyOrderAccessToken(token,id)) notFound();
+  const admin=getAdminSupabase();
+  const {data:order,error}=await admin.from('orders').select('id,store_id,product_id,buyer_email,gross_amount,currency,status,payment_status,delivery_status,created_at,paid_at,invoice_number,download_token_expires_at,download_revoked_at,products(title,slug),stores(name,username)').eq('id',id).maybeSingle();
+  if(error||!order) notFound();
+  const product=Array.isArray(order.products)?order.products[0]:order.products; const store=Array.isArray(order.stores)?order.stores[0]:order.stores; const {data:item}=await admin.from('order_items').select('file_path,file_access_url,title').eq('order_id',order.id).order('created_at',{ascending:true}).limit(1).maybeSingle();
+  const base=getAppBaseUrl();
+  return <main className="success"><div className="card success-card"><div className="pill">{order.status==='paid'?'Payment confirmed':'Order'}</div><h1 style={{fontFamily:'Space Grotesk',fontSize:42,margin:'16px 0 8px'}}>Order details</h1><p className="muted">{product?.title||'Digital product'} · {store?.name||'TABLELY creator'}</p><div className="card success-order-details"><div className="success-detail"><span className="muted success-detail-label">Order ID</span><strong className="success-detail-value">{order.id}</strong></div><div className="success-detail"><span className="muted success-detail-label">Product</span><strong className="success-detail-value">{product?.title||'Product'}</strong></div><div className="success-detail"><span className="muted success-detail-label">Amount</span><strong className="success-detail-value">{formatMoney(Number(order.gross_amount),order.currency)}</strong></div><div className="success-detail"><span className="muted success-detail-label">Date</span><strong className="success-detail-value">{new Date(order.paid_at||order.created_at).toLocaleString('en-IN')}</strong></div><div className="success-detail"><span className="muted success-detail-label">Payment</span><strong className="success-detail-value">{String(order.payment_status).toUpperCase()}</strong></div><div className="success-detail"><span className="muted success-detail-label">Delivery</span><strong className="success-detail-value">{String(order.delivery_status).toUpperCase()}</strong></div><div className="success-detail"><span className="muted success-detail-label">Invoice</span><strong className="success-detail-value">{order.invoice_number||'Pending'}</strong></div></div>{order.status==='paid'&&order.delivery_status==='available'&&!order.download_revoked_at?<a className="btn btn-primary btn-large" href={`/api/orders/${encodeURIComponent(id)}/download?token=${encodeURIComponent(token)}`}>{item?.file_access_url?'Open access link':'Download product'} →</a>:<div className="info-note">Download access is not currently available.</div>}<div style={{display:'flex',gap:10,marginTop:12}}><Link className="btn" href="/account">My purchases</Link><Link className="btn" href={store?.username?getStorePath(store.username, 'linkhub'):'/'}>Back to store</Link>{product?.slug&&store?.username?<Link className="btn" href={getProductPath(store.username, product.slug)}>View product</Link>:null}</div><RefundRequest orderId={order.id} buyerEmail={order.buyer_email} eligible={['paid','partially_refunded'].includes(order.status) && !order.download_revoked_at}/><DisputeRequest orderId={order.id} buyerEmail={order.buyer_email} eligible={['paid','partially_refunded','disputed'].includes(order.status)}/></div></main>;
+}

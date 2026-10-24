@@ -8,7 +8,10 @@
     "build": "next build",
     "start": "next start -p 3001",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "node --experimental-strip-types --test tests/build27-migration-integrity.test.mjs tests/build27-payment-validation.test.mjs tests/build28-menu-import.test.mjs tests/build28-contract.test.mjs tests/build28_6-ai-management.test.mjs tests/build29-split-billing.test.mjs tests/build29-contract.test.mjs tests/build31_6-support.test.mjs tests/build31_7-session-ops.test.mjs tests/build31_7-live-chat.test.mjs tests/mobile-inbox-panels.test.mjs tests/orders-date-range.test.mjs tests/order-status-badge.test.mjs tests/studio-shell-sidebar.test.mjs tests/build32-contract.test.mjs",
+    "test:build28": "node --experimental-strip-types --test tests/build28-menu-import.test.mjs tests/build28-contract.test.mjs tests/build28_6-ai-management.test.mjs",
+    "check:migrations": "node scripts/check-supabase-migration-versions.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "0.7.0",

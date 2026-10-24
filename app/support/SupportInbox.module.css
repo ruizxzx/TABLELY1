@@ -1,0 +1,174 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.5fr);
+  gap: 16px;
+  margin-top: 20px;
+  align-items: start;
+}
+
+.ticketList,
+.conversation {
+  min-width: 0;
+  padding: 18px;
+}
+
+.ticketItem {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 13px 2px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ticketItem > span {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.ticketItem strong,
+.ticketItem small {
+  overflow-wrap: anywhere;
+}
+
+.ticketItem small,
+.ticketItem time {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.ticketItem.active {
+  color: #155b3a;
+}
+
+.messages {
+  display: grid;
+  gap: 10px;
+  max-height: 52vh;
+  overflow: auto;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.message {
+  max-width: 92%;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow-wrap: anywhere;
+}
+
+.message.fromPlatform {
+  justify-self: end;
+  background: #eff7f1;
+}
+
+.message p {
+  margin: 7px 0;
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+
+.message strong,
+.message time {
+  font-size: 11px;
+}
+
+.message time {
+  color: var(--muted);
+}
+
+.internalNote {
+  max-width: 100%;
+  background: #fff8e9;
+  border-color: #ead8ae;
+}
+
+.reply {
+  display: grid;
+  gap: 9px;
+  margin-top: 14px;
+}
+
+.reply textarea,
+.createForm textarea,
+.createForm input,
+.createForm select,
+.reply select {
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.createForm {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 18px;
+}
+
+.createForm label,
+.reply label,
+.adminToolbar label,
+.adminControls label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.createGrid,
+.adminControls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.adminToolbar {
+  max-width: 280px;
+  margin-top: 16px;
+}
+
+.adminControls {
+  align-items: end;
+  padding: 12px 0;
+}
+
+.adminControls p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .messages {
+    max-height: 45vh;
+  }
+}
+
+@media (max-width: 560px) {
+  .createGrid,
+  .adminControls {
+    grid-template-columns: 1fr;
+  }
+}
