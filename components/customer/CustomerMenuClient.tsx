@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Search, Plus, Leaf, Flame, Star, Languages, Tag, ArrowRight } from 'lucide-react';
+import { Search, Plus, Leaf, Flame, Star, Languages, Tag, ArrowRight, ShoppingBag } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { CustomerFrame } from './CustomerLayout';
 import { cartStorageKey, getPublicMenu, getPublicMenuLanguageSettings, getPublicTableContext, getPublicActiveOffers, type PublicCouponOffer, type PublicMenuItem, type CartItem, readCart, saveCart, saveCouponCode, formatMoney } from '@/lib/customer';
@@ -94,7 +94,35 @@ export default function CustomerMenuClient({ restaurantSlug, tableCode }: { rest
   if(error||!context)return <main className="customer-page"><div className="customer-error"><h1>Unable to open menu</h1><p>{error??'Invalid table.'}</p></div></main>;
   return <CustomerFrame restaurantName={context.restaurant_name} tableNumber={context.table_number} tableCode={context.table_code} restaurantSlug={context.restaurant_slug}>
     <div className="customer-content">
-      <section className="customer-welcome"><div><span className="customer-eyebrow">TABLE {context.table_number}</span><h1>What are you craving?</h1><p>Order directly from your table. No app or account required.</p></div></section>
+      <section className="customer-welcome">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <span className="customer-eyebrow">TABLE {context.table_number}</span>
+            <h1>What are you craving?</h1>
+            <p>Order directly from your table. No app or account required.</p>
+          </div>
+          <Link
+            href={`/r/${restaurantSlug}/order`}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 12px',
+              background: '#ecfdf5',
+              color: '#065f46',
+              borderRadius: 20,
+              border: '1px solid #a7f3d0',
+              fontSize: 12,
+              fontWeight: 600,
+              textDecoration: 'none',
+              marginTop: 4
+            }}
+          >
+            <ShoppingBag size={14} color="#059669" />
+            <span>Order for Takeaway / Pickup →</span>
+          </Link>
+        </div>
+      </section>
       {offers.length ? <section className="customer-offer-strip" aria-label="Active offers">{offers.map(offer => <div className="customer-offer" key={offer.id}><Tag size={17}/><div><strong>{offer.title}</strong><span>{offer.discount_type==='PERCENTAGE'?`${offer.discount_value}% OFF`:`₹${offer.discount_value} OFF`} · Min {formatMoney(Number(offer.minimum_order_amount))}{offer.code?` · Code ${offer.code}`:''}</span></div><button type="button" className="customer-add" onClick={()=>{saveCouponCode(tableCode,offer.code);setUsedOffer(offer.code);}}>{usedOffer===offer.code?'Applied':'Use offer'}</button></div>)}</section> : null}
       <div className="customer-menu-toolbar">
         <div className="customer-search-wrap"><Search size={17}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search food, drinks…" aria-label="Search menu"/></div>
