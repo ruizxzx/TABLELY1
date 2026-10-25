@@ -44,9 +44,9 @@ export async function POST(request:Request){
     console.error('subscriptions/create: provider subscription creation failed',{planId:parsed.data.planId,interval:parsed.data.interval,providerPlanId:context.provider_plan_id,error:error instanceof Error?error.message:'unknown error'});
     const providerMessage=error instanceof Error ? error.message : '';
     const normalized=providerMessage.toLowerCase();
-    const safeError=normalized.includes('does not exist')||normalized.includes('not belong')||normalized.includes('invalid plan')||normalized.includes('plan')&&normalized.includes('found')
+    const safeError=normalized.includes('does not exist')||normalized.includes('not belong')||normalized.includes('invalid plan')||(normalized.includes('plan')&&normalized.includes('found'))||normalized.includes('could not be found')||(normalized.includes('id')&&normalized.includes('invalid'))
       ? 'The Tablely billing plan is not valid for the currently configured Razorpay account. Please ask a platform administrator to re-provision this plan.'
-      : 'Could not create the Tablely subscription. Please try again or contact support.';
+      : (providerMessage ? `Could not create the Tablely subscription: ${providerMessage}` : 'Could not create the Tablely subscription. Please try again or contact support.');
     return NextResponse.json({error:safeError},{status:502});
   }
 }

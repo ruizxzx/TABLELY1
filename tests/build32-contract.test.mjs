@@ -133,6 +133,51 @@ test('Build 32 reuses existing menu translation data and language picker', async
   assert.match(settings, /enabledLanguages/);
 });
 
+test('restaurant and customer chat surfaces keep AI suggestions separate from private support chat', async () => {
+  const restaurantShell = await read('components/StudioShell.tsx');
+  const restaurantChat = await read('components/ai/RestaurantAiChatbot.tsx');
+  const customerChat = await read('components/customer/CustomerRestaurantChat.tsx');
+  const analyticsPage = await read('app/analytics/page.tsx');
+  const assistant = await read('components/ai/AssistantChat.tsx');
+  assert.match(restaurantShell, /RestaurantAiChatbot/);
+  assert.match(restaurantChat, /Support/);
+  assert.match(restaurantChat, /Analytics/);
+  assert.match(restaurantChat, /tablely-open-ai-analytics/);
+  assert.match(analyticsPage, /tablely-open-ai-analytics/);
+  assert.match(customerChat, /Chat with restaurant/);
+  assert.match(customerChat, /Ask AI suggestions/);
+  assert.match(assistant, /api\/customer\/ai-suggestions/);
+  assert.match(assistant, /Dish ratings are not available/);
+});
+
+test('public menu modifier groups are aggregated with bounded lateral subqueries', async () => {
+  const sql = await read('supabase/migrations/20261024140000_build32_public_variant_translations.sql');
+  assert.match(sql, /coalesce\(modifier_group_data\.modifier_groups, '\[\]'::jsonb\) as modifier_groups/i);
+  assert.match(sql, /left join lateral \(/i);
+  assert.match(sql, /from public\.menu_item_modifier_groups mig/i);
+  assert.match(sql, /from public\.modifier_group_translations mgt/i);
+  assert.match(sql, /from public\.modifier_translations mt/i);
+  assert.match(sql, /order by mig\.sort_order, mg\.sort_order, mg\.name/i);
+  assert.doesNotMatch(sql, /where mig\.menu_item_id = i\.id\),'\\[\\]'::jsonb\) modifier_groups/i);
+});
+
+test('platform admin pages share a responsive workspace shell and concise navigation', async () => {
+  const layout = await read('app/admin/layout.tsx');
+  const shell = await read('app/admin/AdminShell.tsx');
+  const shellStyles = await read('app/admin/AdminShell.module.css');
+  const adminStyles = await read('app/admin/admin.css');
+  const dashboard = await read('app/admin/page.tsx');
+  assert.match(layout, /<AdminShell>\{children\}<\/AdminShell>/);
+  assert.match(shell, /aria-label="Admin navigation"/);
+  assert.match(shell, /aria-current=\{active \? 'page' : undefined\}/);
+  assert.match(shell, /\/admin\/ai-management/);
+  assert.match(shell, /pathname === '\/admin\/login'/);
+  assert.match(shellStyles, /@media \(max-width: 820px\)/);
+  assert.match(shellStyles, /prefers-reduced-motion: reduce/);
+  assert.match(adminStyles, /\.admin-workspace \.surface-card/);
+  assert.doesNotMatch(dashboard, /href="\/admin\/(?:support|partners|customer-engagement|ai-management|branding|landing|control|operations|content|contacts|restaurants|billing|plans|subscriptions)"/);
+});
+
 test('loyalty expiry is an idempotent service-role ledger operation with bounded batches', async () => {
   const migration = await read('supabase/migrations/20261024060000_build32_loyalty_expiry_processor.sql');
   const route = await read('app/api/cron/loyalty-expiry/route.ts');

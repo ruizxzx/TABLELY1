@@ -7,6 +7,7 @@ import {
   ClipboardList,
   LayoutDashboard,
   Menu,
+  Package,
   PanelLeftClose,
   PanelLeftOpen,
   QrCode,
@@ -31,6 +32,7 @@ import { getSupabaseBrowserClient } from '@/lib/supabase';
 import { Brand } from './Brand';
 import { RealtimeNotificationCenter } from './RealtimeNotificationCenter';
 import { CustomerChatInbox } from './customer/CustomerChatInbox';
+import { RestaurantAiChatbot } from './ai/RestaurantAiChatbot';
 
 const items = [
   { href: '/dashboard', label: 'Overview', Icon: LayoutDashboard, roles: ['OWNER', 'MANAGER'] },
@@ -38,6 +40,7 @@ const items = [
   { href: '/tables', label: 'Tables', Icon: Table2, roles: ['OWNER', 'MANAGER', 'WAITER'] },
   { href: '/qr', label: 'QR Codes', Icon: QrCode, roles: ['OWNER', 'MANAGER'] },
   { href: '/menu', label: 'Menu', Icon: UtensilsCrossed, roles: ['OWNER', 'MANAGER'] },
+  { href: '/inventory', label: 'Inventory', Icon: Package, roles: ['OWNER', 'MANAGER'] },
   { href: '/kitchen', label: 'Kitchen', Icon: ChefHat, roles: ['OWNER', 'MANAGER', 'KITCHEN'] },
   { href: '/service-requests', label: 'Service', Icon: BellRing, roles: ['OWNER', 'MANAGER', 'WAITER'] },
   { href: '/customer-messages', label: 'Customer messages', Icon: MessageCircle, roles: ['OWNER', 'MANAGER', 'WAITER'] },
@@ -60,6 +63,7 @@ const items = [
 // non-owner staff. Owners always see everything their role list allows.
 // Items not listed here have no fine-grained gate (role/entitlement only).
 const PERMISSION_FOR_HREF: Record<string, string> = {
+  '/inventory': 'INVENTORY_VIEW',
   '/staff': 'STAFF_MANAGEMENT',
   '/customers': 'EDIT_ORDERS',
   '/payments': 'PAYMENTS',
@@ -188,6 +192,7 @@ export function StudioShell({ children }: { children: ReactNode }) {
       if (features.SERVICE_REQUESTS === false) allowed = allowed.filter((href) => href !== '/service-requests');
       if (features.ONLINE_PAYMENTS === false) allowed = allowed.filter((href) => href !== '/payments');
       if (features.ANALYTICS === false) allowed = allowed.filter((href) => href !== '/analytics');
+      if (features.INVENTORY === false) allowed = allowed.filter((href) => href !== '/inventory');
       if (staff.role !== 'OWNER' && staff.role !== 'MANAGER') allowed = allowed.filter((href) => href !== '/dashboard/subscription');
       // Fine-grained permission gate (Managers only; Owners always bypass).
       if (staff.role !== 'OWNER' && permMap) {
@@ -246,6 +251,7 @@ export function StudioShell({ children }: { children: ReactNode }) {
     .filter((item) => item.href !== '/service-requests' || entitlements.SERVICE_REQUESTS)
     .filter((item) => item.href !== '/payments' || entitlements.PAYMENT_TRACKING)
     .filter((item) => item.href !== '/analytics' || entitlements.ANALYTICS)
+    .filter((item) => item.href !== '/inventory' || entitlements.INVENTORY !== false)
     .filter((item) => {
       if (role !== 'MANAGER' || !permissions) return true;
       const required = PERMISSION_FOR_HREF[item.href];
@@ -359,6 +365,7 @@ export function StudioShell({ children }: { children: ReactNode }) {
           </div>
           <Link href="/help" className="topbar-help-link" aria-label="Open Help & Guides" title="Help & Guides"><BookOpen size={17} /></Link>
           {['OWNER', 'MANAGER', 'WAITER'].includes(role) ? <CustomerChatInbox /> : null}
+          {['OWNER', 'MANAGER', 'WAITER'].includes(role) ? <RestaurantAiChatbot /> : null}
           <RealtimeNotificationCenter />
           <div className="topbar-user">
             <div className="avatar avatar-small">{userName.slice(0, 2).toUpperCase()}</div>

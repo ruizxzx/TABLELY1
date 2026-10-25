@@ -55,3 +55,34 @@ test('custom AI endpoints reject cleartext HTTP and private IP targets',async()=
  assert.match(service,/Provider endpoints must use HTTPS/);
  assert.match(service,/private IP address/);
 });
+
+test('AI management exposes a short setup flow and keeps expert controls expandable',async()=>{
+ const page=await read('app/admin/ai-management/page.tsx');
+ assert.match(page,/1\. Connect an AI provider/);
+ assert.match(page,/2\. Add a model/);
+ assert.match(page,/3\. Choose what AI can do/);
+ assert.match(page,/Advanced provider settings/);
+ assert.match(page,/Advanced model settings/);
+ assert.match(page,/Fallbacks and limits/);
+ assert.match(page,/<details/);
+ assert.match(page,/Customer menu translations in Hindi and Bengali use the Menu extraction route/);
+});
+
+test('restaurant assistant reserves organization-scoped AI usage and selects configured routes',async()=>{
+ const service=await read('lib/ai-management.ts');
+ const staffRoute=await read('app/api/restaurant-ai/route.ts');
+ const customerRoute=await read('app/api/customer/ai-suggestions/route.ts');
+ const migration=await read('supabase/migrations/20261025020000_restaurant_ai_assistant.sql');
+ assert.match(service,/reserve_restaurant_ai_request/);
+ assert.match(service,/restaurant_analytics/);
+ assert.match(staffRoute,/resolveServerRestaurantAccess/);
+ assert.match(staffRoute,/permission: 'ANALYTICS'/);
+ assert.match(staffRoute,/get_build12_analytics/);
+ assert.match(staffRoute,/restaurantAiAllowedRoutes/);
+ assert.match(customerRoute,/get_restaurant_ai_public_context/);
+ assert.match(customerRoute,/recommendedItemIds/);
+ assert.match(migration,/daily_usage\.request_count < 30/);
+ assert.match(migration,/reserved_output_tokens \+ p_reserved_tokens <= 12000/);
+ assert.match(migration,/having count\(distinct o2\.id\) >= 3/);
+ assert.match(migration,/revoke all on function public\.reserve_restaurant_ai_request[\s\S]*?to service_role/);
+});

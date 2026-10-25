@@ -1,0 +1,313 @@
+.admin-workspace {
+  color: #1d1d1f;
+}
+
+.admin-workspace .admin-page {
+  width: 100%;
+  max-width: 1580px;
+  min-height: calc(100vh - 62px);
+  padding: clamp(20px, 3vw, 38px) clamp(16px, 3vw, 38px) 64px;
+  background: transparent;
+}
+
+.admin-workspace .admin-top {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 0 0 22px;
+}
+
+.admin-workspace .admin-top h1 {
+  margin: 5px 0 0;
+  color: #1d1d1f;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+  font-size: clamp(27px, 3vw, 34px);
+  font-weight: 690;
+  letter-spacing: -.045em;
+}
+
+.admin-workspace .admin-top p {
+  max-width: 620px;
+  margin: 7px 0 0;
+  color: #73737a;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.admin-workspace .eyebrow {
+  color: #777780;
+  font-size: 9px;
+  letter-spacing: .12em;
+}
+
+.admin-workspace .admin-top > .button-row {
+  flex: 0 0 auto;
+  gap: 7px;
+}
+
+.admin-workspace .button {
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 11px;
+}
+
+.admin-workspace .button-light {
+  border-color: rgba(60, 60, 67, .14);
+  background: rgba(255, 255, 255, .76);
+  color: #26262a;
+}
+
+.admin-workspace .button-primary {
+  border-color: #17171a;
+  background: #17171a;
+  color: #fff;
+}
+
+.admin-workspace .button-primary:hover:not(:disabled) {
+  background: #35353a;
+  box-shadow: 0 5px 14px rgba(20, 20, 24, .14);
+}
+
+.admin-workspace .surface-card,
+.admin-workspace .metric-card {
+  border: 1px solid rgba(60, 60, 67, .105);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, .84);
+  box-shadow: 0 3px 14px rgba(28, 28, 32, .035), 0 1px 2px rgba(28, 28, 32, .025);
+}
+
+.admin-workspace .surface-card {
+  margin-bottom: 13px;
+  padding: clamp(14px, 1.7vw, 20px);
+}
+
+.admin-workspace .card-heading {
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.admin-workspace .card-heading h2,
+.admin-workspace .surface-card > h2 {
+  color: #222226;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -.025em;
+}
+
+.admin-workspace .card-heading p {
+  color: #7c7c83;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.admin-workspace .metric-grid {
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 9px;
+  margin-bottom: 13px;
+}
+
+.admin-workspace .metric-card {
+  min-height: 94px;
+  padding: 12px 13px;
+}
+
+.admin-workspace .metric-head {
+  align-items: center;
+  color: #75757c;
+  font-size: 10px;
+  font-weight: 550;
+}
+
+.admin-workspace .metric-head svg {
+  color: #85858c;
+}
+
+.admin-workspace .metric-card strong {
+  margin-top: 9px;
+  color: #1d1d1f;
+  font-size: 23px;
+  font-weight: 680;
+  letter-spacing: -.045em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-workspace .metric-card small {
+  margin-top: 6px;
+  color: #85858b;
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.admin-workspace input:not([type="checkbox"]):not([type="radio"]),
+.admin-workspace select,
+.admin-workspace textarea {
+  min-height: 37px;
+  border-color: rgba(60, 60, 67, .16);
+  border-radius: 9px;
+  background-color: rgba(255, 255, 255, .88);
+  box-shadow: none;
+  color: #26262a;
+  font-size: 11px;
+}
+
+.admin-workspace textarea {
+  min-height: 90px;
+}
+
+.admin-workspace input:focus,
+.admin-workspace select:focus,
+.admin-workspace textarea:focus {
+  border-color: #0a84ff;
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, .12);
+}
+
+.admin-workspace label {
+  color: #5f5f66;
+  font-size: 10px;
+  font-weight: 620;
+}
+
+.admin-workspace .admin-invite-grid {
+  gap: 11px;
+}
+
+.admin-workspace .data-table {
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+
+.admin-workspace .data-row {
+  min-width: 600px;
+  gap: 11px;
+  padding: 10px 0;
+  border-color: rgba(60, 60, 67, .09);
+  font-size: 10px;
+}
+
+.admin-workspace .data-row > div strong {
+  color: #2b2b30;
+  font-size: 10px;
+  font-weight: 620;
+}
+
+.admin-workspace .data-row > div span,
+.admin-workspace .data-row > span {
+  color: #77777e;
+  font-size: 9px;
+}
+
+.admin-workspace .data-head {
+  color: #85858c;
+  font-size: 9px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: .045em;
+}
+
+.admin-workspace .data-row .button-row {
+  gap: 5px;
+}
+
+.admin-workspace .button.compact {
+  min-height: 30px;
+  padding: 0 9px;
+  border-radius: 8px;
+  font-size: 9px;
+}
+
+.admin-workspace .notice {
+  border-radius: 11px;
+  font-size: 11px;
+}
+
+.admin-workspace .notice-error {
+  border-color: rgba(255, 59, 48, .18);
+  background: rgba(255, 59, 48, .065);
+  color: #a12620;
+}
+
+.admin-workspace .notice-success {
+  border-color: rgba(52, 199, 89, .2);
+  background: rgba(52, 199, 89, .08);
+  color: #176b34;
+}
+
+.admin-workspace .empty-wide {
+  padding: 20px 12px;
+  color: #85858c;
+  font-size: 11px;
+  text-align: center;
+}
+
+.admin-workspace details {
+  color: #45454b;
+}
+
+.admin-workspace details > summary {
+  width: fit-content;
+  padding: 7px 0;
+  color: #696970;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+  list-style-position: inside;
+}
+
+.admin-workspace details[open] > summary {
+  margin-bottom: 6px;
+  color: #242429;
+}
+
+.admin-workspace .setup-loading {
+  padding: 50px 10px;
+  color: #77777e;
+  text-align: center;
+  font-size: 12px;
+}
+
+.admin-workspace .admin-note {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 14px;
+  border: 1px solid rgba(60, 60, 67, .1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .72);
+  color: #696970;
+  font-size: 10px;
+}
+
+@media (max-width: 760px) {
+  .admin-workspace .admin-page {
+    padding: 20px 14px 40px;
+  }
+
+  .admin-workspace .admin-top {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 13px;
+  }
+
+  .admin-workspace .admin-top > .button-row {
+    width: 100%;
+  }
+
+  .admin-workspace .admin-top .button-row > .button {
+    flex: 1;
+  }
+
+  .admin-workspace .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .admin-workspace .surface-card,
+  .admin-workspace .metric-card {
+    background: #fff;
+  }
+}

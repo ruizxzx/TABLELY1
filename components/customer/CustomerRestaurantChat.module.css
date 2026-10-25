@@ -44,6 +44,9 @@
 .header > div { display: grid; gap: 3px; }
 .header small, .privacy { color: var(--muted, #777); font-size: 11px; }
 .header button { display: grid; place-items: center; border: 0; background: transparent; padding: 6px; cursor: pointer; }
+.tabs { display:grid; grid-template-columns:1fr 1fr; gap:5px; border-bottom:1px solid var(--line,#e8e2d9); padding:8px; }
+.tabs button { display:flex; min-height:36px; align-items:center; justify-content:center; gap:6px; border:1px solid transparent; border-radius:9px; background:transparent; color:var(--muted,#777); font:inherit; font-size:11px; font-weight:700; cursor:pointer; }
+.tabs .activeTab { border-color:var(--line,#e8e2d9); background:var(--surface-2,#f3f0eb); color:var(--ink,#172015); }
 .connection { display: flex; align-items: center; gap: 7px; padding: 9px 15px 0; color: var(--muted, #777); font-size: 11px; }
 .connectedDot, .offlineDot { width: 7px; height: 7px; border-radius: 50%; background: #319463; }
 .offlineDot { background: #c78331; }

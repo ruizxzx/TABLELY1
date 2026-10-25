@@ -22,6 +22,33 @@ function LoginPageContent() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.hash) {
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const desc = hashParams.get('error_description');
+      const code = hashParams.get('error_code');
+      if (desc) {
+        setError(desc.replaceAll('+', ' ') + '. Please sign in with your email and password, or request a fresh link.');
+        return;
+      }
+      if (code) {
+        setError(`Authentication error (${code}). Please sign in with your email and password.`);
+        return;
+      }
+    }
+
+    const paramError = searchParams.get('error');
+    if (paramError === 'missing_auth_code') {
+      setError('The sign-in link is invalid or has expired. Please sign in below, or use Forgot password to get a fresh link.');
+    } else if (paramError === 'auth_callback_failed') {
+      setError('Authentication failed or the link has expired. Please sign in below.');
+    } else if (paramError === 'supabase_not_configured') {
+      setError('Supabase is not configured. Add the required environment variables first.');
+    } else if (paramError) {
+      setError(`Sign-in notice: ${paramError.replaceAll('_', ' ')}`);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
     let cancelled = false;
     async function redirectExistingSession() {
       const supabase = getSupabaseBrowserClient();

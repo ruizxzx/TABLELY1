@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { BarChart3, CalendarDays, Clock3, RefreshCw, TrendingDown, TrendingUp } from 'lucide-react';
+import { BarChart3, CalendarDays, Clock3, RefreshCw, Sparkles, TrendingDown, TrendingUp } from 'lucide-react';
 import { Download, Printer } from 'lucide-react';
 import { StudioShell } from '@/components/StudioShell';
 import { SectionHeader } from '@/components/SectionHeader';
@@ -196,6 +196,7 @@ export default function AnalyticsPage() {
             <button className="button button-light" onClick={exportCsv}><Download size={15} /> CSV</button>
             <button className="button button-light" onClick={() => window.print()}><Printer size={15} /> PDF / Print</button>
             <button className="button button-light" onClick={() => void load()}><RefreshCw size={15} /> Refresh</button>
+            <button className="button button-primary" onClick={() => window.dispatchEvent(new Event('tablely-open-ai-analytics'))}><Sparkles size={15} /> Ask AI</button>
           </div>
         }
       />

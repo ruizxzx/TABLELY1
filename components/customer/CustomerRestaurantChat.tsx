@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { MessageCircle, Send, X } from 'lucide-react';
+import { MessageCircle, Send, Sparkles, X } from 'lucide-react';
 import { getOrCreateVisitToken } from '@/lib/customer';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { AssistantChat } from '@/components/ai/AssistantChat';
 import styles from './CustomerRestaurantChat.module.css';
 
 type Conversation = {
@@ -39,6 +40,7 @@ function mergeMessages(current: Message[], incoming: Message[]) {
 
 export function CustomerRestaurantChat({ tableCode }: { tableCode: string }) {
   const [open, setOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'restaurant' | 'ai'>('restaurant');
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
@@ -242,11 +244,16 @@ export function CustomerRestaurantChat({ tableCode }: { tableCode: string }) {
         <MessageCircle size={19} /><span>Message</span>
       </button>
       {open ? (
-        <section className={styles.panel} aria-label="Message restaurant">
+        <section className={styles.panel} aria-label="Restaurant chat and AI suggestions">
           <header className={styles.header}>
-            <div><strong>Message restaurant</strong><small>Table {conversation?.tableNumber ?? '—'}</small></div>
+            <div><strong>{activeTab === 'restaurant' ? 'Message restaurant' : 'AI menu suggestions'}</strong><small>Table {conversation?.tableNumber ?? '—'}</small></div>
             <button type="button" aria-label="Close messages" onClick={() => setOpen(false)}><X size={18} /></button>
           </header>
+          <nav className={styles.tabs} aria-label="Customer chat options">
+            <button type="button" className={activeTab === 'restaurant' ? styles.activeTab : ''} aria-pressed={activeTab === 'restaurant'} onClick={() => { setActiveTab('restaurant'); if (!conversation) void openConversation(); }}><MessageCircle size={14} /> Chat with restaurant</button>
+            <button type="button" className={activeTab === 'ai' ? styles.activeTab : ''} aria-pressed={activeTab === 'ai'} onClick={() => setActiveTab('ai')}><Sparkles size={14} /> Ask AI suggestions</button>
+          </nav>
+          {activeTab === 'ai' ? <AssistantChat audience="customer" tableCode={tableCode} /> : <>
           <div className={styles.connection} role="status">
             <span className={connection === 'connected' ? styles.connectedDot : styles.offlineDot} />
             {connection === 'connected' ? 'Live connection' : connection === 'offline' ? 'Connection unavailable' : 'Connecting…'}
@@ -255,7 +262,7 @@ export function CustomerRestaurantChat({ tableCode }: { tableCode: string }) {
           {loading ? <div className={styles.empty}>Opening your private conversation…</div> : (
             <>
               <div className={styles.messages} ref={listRef} aria-live="polite">
-                {!messages.length ? <div className={styles.empty}>Ask about the menu, your order, or anything else. You can keep browsing while you wait.</div> : null}
+                {!messages.length ? <div className={styles.empty}>Ask the restaurant team about the menu or your order.</div> : null}
                 {messages.map((message) => (
                   <article key={message.id} className={message.sender_type === 'CUSTOMER' ? styles.mine : styles.theirs}>
                     <p>{message.body}</p>
@@ -274,6 +281,7 @@ export function CustomerRestaurantChat({ tableCode }: { tableCode: string }) {
               <p className={styles.privacy}>Only you and this restaurant can access this conversation.</p>
             </>
           )}
+          </>}
         </section>
       ) : null}
     </>

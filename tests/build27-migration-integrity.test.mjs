@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const migrationDir = join(root, 'supabase', 'migrations');
 const build27Migration = await readFile(join(migrationDir, '202610240001_build27_stability_foundation.sql'), 'utf8');
+const workspaceCreationFix = await readFile(join(migrationDir, '20261024130000_fix_restaurant_workspace_creation.sql'), 'utf8');
 
 test('Supabase migration numeric versions are unique and valid', async () => {
   const files = (await readdir(migrationDir)).filter((name) => name.endsWith('.sql'));
@@ -30,6 +31,17 @@ test('Supabase migration numeric versions are unique and valid', async () => {
   }
   const duplicateVersions = [...versions.entries()].filter(([, names]) => names.length > 1);
   assert.deepEqual(duplicateVersions, []);
+});
+
+test('restaurant workspace creation assigns required OWNER capabilities and seeds default categories', () => {
+  assert.match(workspaceCreationFix.trimStart(), /^--[\s\S]*?begin;/i);
+  assert.match(workspaceCreationFix.trimEnd(), /commit;\s*$/i);
+  assert.match(workspaceCreationFix, /insert into public\.staff\s*\(\s*user_id,\s*organization_id,\s*branch_id,\s*role,\s*can_kitchen,\s*can_waiter\s*\)\s*values\s*\(v_user_id,\s*v_org_id,\s*v_branch_id,\s*'OWNER',\s*true,\s*true\)/i);
+  assert.match(workspaceCreationFix, /perform public\.ensure_default_menu_categories\(v_branch_id\)/i);
+  assert.match(workspaceCreationFix, /perform public\.claim_subscription_invite_for_current_user\(v_org_id\)/i);
+  assert.match(workspaceCreationFix, /if v_user_id is null then[\s\S]*?raise exception 'Not authenticated'/i);
+  assert.match(workspaceCreationFix, /grant execute on function public\.create_restaurant_for_current_user\(text, text, text\) to authenticated/i);
+  assert.match(workspaceCreationFix, /revoke execute on function public\.create_restaurant_for_current_user\(text, text, text\) from anon, public/i);
 });
 
 test('historical migration replay files are idempotent at repository level', async () => {
