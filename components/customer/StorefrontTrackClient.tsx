@@ -35,7 +35,21 @@ export default function StorefrontTrackClient({
   async function loadOrder() {
     try {
       const data = await getPublicFulfillmentOrder(trackingToken);
-      setOrder(data);
+      let handoff: { pickup_code?: string; delivery_otp?: string } = {};
+      try {
+        handoff = JSON.parse(window.sessionStorage.getItem(`tablely:fulfillment:handoff:${trackingToken}`) ?? '{}');
+      } catch {
+        handoff = {};
+      }
+      const merged = {
+        ...data,
+        pickup_code: data.pickup_code ?? handoff.pickup_code ?? null,
+        delivery_otp: data.delivery_otp ?? handoff.delivery_otp ?? null,
+      };
+      setOrder(merged);
+      if (merged.fulfillment_status === 'PICKED_UP' || merged.fulfillment_status === 'DELIVERED') {
+        window.sessionStorage.removeItem(`tablely:fulfillment:handoff:${trackingToken}`);
+      }
       setError(null);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not load order tracking.');
@@ -88,7 +102,7 @@ export default function StorefrontTrackClient({
         { key: 'NEW', label: 'Order Placed', desc: 'Sent to restaurant' },
         { key: 'ACCEPTED', label: 'Accepted', desc: 'Confirmed by kitchen' },
         { key: 'PREPARING', label: 'Preparing', desc: 'Fresh in the kitchen' },
-        { key: 'WAITING_FOR_PICKUP', label: 'Ready for Pickup', desc: 'Waiting at counter' },
+        { key: 'READY_FOR_PICKUP', label: 'Ready for Pickup', desc: 'Waiting at counter' },
         { key: 'PICKED_UP', label: 'Collected', desc: 'Enjoy your meal!' },
       ];
     } else {
@@ -109,13 +123,13 @@ export default function StorefrontTrackClient({
 
     if (order.fulfillment_type === 'PICKUP') {
       if (order.fulfillment_status === 'PICKED_UP' || order.status === 'COMPLETED') return 4;
-      if (order.fulfillment_status === 'WAITING_FOR_PICKUP' || order.status === 'READY') return 3;
+      if (order.fulfillment_status === 'READY_FOR_PICKUP' || order.status === 'READY') return 3;
       if (order.status === 'PREPARING') return 2;
       if (order.status === 'ACCEPTED') return 1;
       return 0;
     } else {
       if (order.fulfillment_status === 'DELIVERED' || order.status === 'COMPLETED') return 4;
-      if (order.fulfillment_status === 'OUT_FOR_DELIVERY') return 3;
+      if (order.fulfillment_status === 'OUT_FOR_DELIVERY' || order.fulfillment_status === 'READY_FOR_DISPATCH') return 3;
       if (order.status === 'PREPARING' || order.status === 'READY') return 2;
       if (order.status === 'ACCEPTED' || order.fulfillment_status === 'ASSIGNED') return 1;
       return 0;

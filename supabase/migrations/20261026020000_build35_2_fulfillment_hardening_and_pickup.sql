@@ -198,7 +198,7 @@ begin
     ofd.pickup_code_display as pickup_code,
     ofd.delivery_otp_display as delivery_otp,
     ofd.assigned_staff_id,
-    s.full_name as assigned_staff_name,
+    coalesce(s.display_name, (select pr.full_name from public.profiles pr where pr.id = s.user_id), 'Staff') as assigned_staff_name,
     ofd.promised_ready_at,
     ofd.promised_delivery_at,
     o.created_at,

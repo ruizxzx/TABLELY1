@@ -1,10 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { Check, CreditCard, Banknote, Loader2, Mail, ShieldCheck, Tag, X, ShoppingBag } from 'lucide-react';
+import { Check, CreditCard, Banknote, Loader2, Mail, ShieldCheck, Tag, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { CustomerFrame, CustomerBack } from './CustomerLayout';
-import { createPublicOrder, createPublicPaymentAttempt, createPayLaterOrder, openPayLaterSession, clearCart, getPublicMenu, getPublicTableContext, getPublicOrderingOptions, previewPublicCheckout, type CartItem, type PublicCheckoutPreview, readCart, readCouponCode, saveCouponCode, clearCouponCode, formatMoney, saveOrderEmailNotificationSubscription, saveFulfillmentCart } from '@/lib/customer';
+import { createPublicOrder, createPublicPaymentAttempt, createPayLaterOrder, openPayLaterSession, clearCart, getPublicMenu, getPublicTableContext, getPublicOrderingOptions, previewPublicCheckout, type CartItem, type PublicCheckoutPreview, readCart, readCouponCode, saveCouponCode, clearCouponCode, formatMoney, saveOrderEmailNotificationSubscription } from '@/lib/customer';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 
 function checkoutKey(tableCode: string) { if (typeof window === 'undefined') return `tablely-checkout:${tableCode}`; const key=`tablely-checkout:${tableCode}`; let current=window.sessionStorage.getItem(key); if(!current){current=crypto.randomUUID();window.sessionStorage.setItem(key,current)} return current; }
@@ -111,29 +111,11 @@ export default function CustomerCheckoutClient({ restaurantSlug, tableCode }: { 
     }
   }
 
-  function switchToPickup() {
-    if (!context) return;
-    if (cart.length > 0) {
-      saveFulfillmentCart(context.branch_id, cart);
-    }
-    window.location.href = `/r/${restaurantSlug}/order/checkout?branchId=${encodeURIComponent(context.branch_id)}&type=PICKUP`;
-  }
-
   async function placeOrder(){if(!cart.length||!context||busy)return;const normalizedPhone=customerPhone.replace(/[^0-9]/g,'').replace(/^91(?=\d{10}$)/,'');if(method==='PAY_LATER'&&!(await requireCustomerAuth()))return;if(!customerName.trim()){setError('Please enter your name.');return;}if(!/^[6-9]\d{9}$/.test(normalizedPhone)){setError('Please enter a valid 10-digit mobile number.');return;}if(emailUpdatesEnabled&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())){setError('Please enter a valid email address for order updates.');return;}if(method==='PAY_AT_COUNTER'&&!counterEnabled){setError('Pay at counter is not available for this branch.');return;}if(method==='PAY_LATER'&&!payLaterEnabled){setError('Pay After Delivery is not available for this branch.');return;}setBusy(true);setError(null);try{await saveAuthenticatedCustomerContact(customerName.trim(),normalizedPhone);if(method==='PAY_AT_COUNTER')await placeCounterOrder();else if(method==='PAY_LATER')await placePayLaterOrder();else await placePaidOrder()}catch(err:unknown){setError(err instanceof Error?err.message:'Could not place order.');setBusy(false)}}
 
   if(loading)return <main className="customer-page customer-loading">Loading checkout…</main>;if(!context)return <main className="customer-page"><div className="customer-error"><h1>Checkout unavailable</h1><p>{error}</p><Link className="customer-primary-button" href={`/r/${restaurantSlug}/table/${tableCode}`}>Back to menu</Link></div></main>;
   const subtotal=preview?.subtotal??cart.reduce((sum,item)=>sum+item.price*item.quantity,0);const discount=preview?.discount??0;const discounted=preview?.discounted_subtotal??Math.max(0,subtotal-discount);const tax=preview?.tax??0;const fees=preview?.additional_charges??0;const total=preview?.total??Math.round((subtotal-discount+tax+fees)*100)/100;const breakdown=preview?.charge_breakdown??[];
-  return <CustomerFrame restaurantName={context.restaurant_name} tableNumber={context.table_number} tableCode={context.table_code} restaurantSlug={context.restaurant_slug}><div className="customer-content customer-checkout-page"><CustomerBack href={`/r/${restaurantSlug}/table/${tableCode}/cart`} label="Cart"/>
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, margin: '8px 0 16px', padding: '12px 16px', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#065f46', fontSize: 13, fontWeight: 500 }}>
-        <ShoppingBag size={18} color="#059669" />
-        <span>Want takeaway instead? Order for <strong>Self-Pickup</strong>.</span>
-      </div>
-      <button type="button" onClick={switchToPickup} style={{ background: '#059669', color: '#ffffff', border: 'none', padding: '7px 14px', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-        Switch to Pickup →
-      </button>
-    </div>
-    <div className="customer-page-title"><span className="customer-eyebrow">CHECKOUT</span><h1>Place your order</h1><p>Table {context.table_number} · {cart.reduce((s,x)=>s+x.quantity,0)} items</p></div>{error?<div className="notice notice-error" role="alert">{error}</div>:null}
+  return <CustomerFrame restaurantName={context.restaurant_name} tableNumber={context.table_number} tableCode={context.table_code} restaurantSlug={context.restaurant_slug}><div className="customer-content customer-checkout-page"><CustomerBack href={`/r/${restaurantSlug}/table/${tableCode}/cart`} label="Cart"/><div className="customer-page-title"><span className="customer-eyebrow">CHECKOUT</span><h1>Place your order</h1><p>Table {context.table_number} · {cart.reduce((s,x)=>s+x.quantity,0)} items</p></div>{error?<div className="notice notice-error" role="alert">{error}</div>:null}
     <div className="customer-checkout-card"><div className="customer-payment-heading"><h2>Your details</h2><span>Required for your order</span></div><label>Customer name<input value={customerName} onChange={e=>setCustomerName(e.target.value)} maxLength={120} autoComplete="name" placeholder="Your name" required/></label><label>Mobile number<input value={customerPhone} onChange={e=>setCustomerPhone(e.target.value)} onBlur={()=>coupon?void refreshPreview(coupon,customerPhone):undefined} inputMode="tel" maxLength={15} autoComplete="tel" placeholder="10-digit mobile number" required/></label></div>
     <div className="customer-checkout-card customer-email-updates-card"><div className="customer-email-updates-row"><div className="customer-email-updates-copy"><strong><Mail size={16}/> Get updates about your order</strong><span>We'll email you when your order status changes.</span></div><label className="customer-switch" aria-label="Get updates about your order"><input type="checkbox" role="switch" checked={emailUpdatesEnabled} onChange={e=>{const enabled=e.target.checked;setEmailUpdatesEnabled(enabled);if(!enabled&&!emailFeedbackConsent)setCustomerEmail('');}}/><span aria-hidden="true"/></label></div>{emailUpdatesEnabled||emailFeedbackConsent?<div className="customer-email-updates-fields"><label>Email address<input type="email" value={customerEmail} onChange={e=>setCustomerEmail(e.target.value)} maxLength={320} autoComplete="email" inputMode="email" placeholder="you@example.com" required={emailUpdatesEnabled||emailFeedbackConsent}/><small>{emailFeedbackConsent?'Used for the optional private feedback invitation you selected.':'Used only for updates about this order. You will not need a TABLELY account.'}</small></label></div>:null}</div>
     <div className="customer-checkout-card customer-engagement-consent"><div className="customer-payment-heading"><h2>Optional customer preferences</h2><span>Separate choices · off by default</span></div><label><input type="checkbox" checked={whatsappServiceConsent} onChange={e=>setWhatsappServiceConsent(e.target.checked)}/> WhatsApp service messages about this order</label><small>Only sent if this restaurant connects its official WhatsApp account. You can opt out at any time.</small><label><input type="checkbox" checked={feedbackConsent} onChange={e=>setFeedbackConsent(e.target.checked)}/> Contact me once for private feedback after my visit by WhatsApp</label><label><input type="checkbox" checked={emailFeedbackConsent} onChange={e=>{const enabled=e.target.checked;setEmailFeedbackConsent(enabled);if(!enabled&&!emailUpdatesEnabled)setCustomerEmail('');}}/> Email me once for private feedback after my visit</label><label><input type="checkbox" checked={whatsappMarketingConsent} onChange={e=>setWhatsappMarketingConsent(e.target.checked)}/> Separate WhatsApp marketing messages from this restaurant</label><small>Marketing permission is separate from service and feedback choices. Choosing neither does not affect your order.</small></div>

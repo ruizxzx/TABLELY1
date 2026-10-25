@@ -1382,7 +1382,7 @@ begin
     order_id, branch_id, event_type, from_status, to_status, actor_user_id, actor_staff_id, metadata
   ) values (
     p_order_id, v_ofd.branch_id, 'RIDER_ASSIGNED', v_ofd.fulfillment_status, 'ASSIGNED',
-    auth.uid(), p_staff_id, jsonb_build_object('rider_name', v_staff.full_name)
+    auth.uid(), p_staff_id, jsonb_build_object('rider_name', coalesce(v_staff.display_name, (select pr.full_name from public.profiles pr where pr.id = v_staff.user_id), 'Staff'))
   );
 
   return true;
@@ -1809,7 +1809,7 @@ begin
     ofd.pickup_code_display,
     ofd.delivery_otp_display,
     ofd.assigned_staff_id,
-    s.full_name,
+    coalesce(s.display_name, (select pr.full_name from public.profiles pr where pr.id = s.user_id), 'Staff') as assigned_staff_name,
     ofd.promised_ready_at,
     ofd.promised_delivery_at,
     o.created_at,

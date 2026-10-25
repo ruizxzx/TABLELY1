@@ -65,6 +65,8 @@ export default function PermissionsPage(){
     {title:'Orders & kitchen',keys:['VIEW_ORDERS','EDIT_ORDERS','CANCEL_ORDERS','KITCHEN_ACCESS']},
     {title:'Finance',keys:['BILLING','CHARGES','PAYMENTS','DISCOUNTS_COUPONS']},
     {title:'Operations',keys:['STAFF_MANAGEMENT','ANALYTICS','SETTINGS','MENU_MANAGEMENT','BRANCH_MANAGEMENT','SUBSCRIPTION_MANAGEMENT']},
+    {title:'Online ordering',keys:['VIEW_ONLINE_ORDERS','VIEW_CUSTOMER_DETAILS','MANAGE_ONLINE_ORDERING','MANAGE_PICKUP']},
+    {title:'Delivery',keys:['VIEW_DELIVERY','MANAGE_DELIVERY','ASSIGN_DELIVERY','UPDATE_DELIVERY_STATUS','COLLECT_DELIVERY_PAYMENT','VIEW_FULFILLMENT_REPORTS']},
   ];
 
   if(loading)return <StudioShell><div className="setup-loading">Loading permissions…</div></StudioShell>;

@@ -86,6 +86,7 @@ const PERMISSION_FOR_PATH_PREFIX: Array<{ prefix: string; permission: string }> 
   { prefix: '/settings/charges', permission: 'CHARGES' },
   { prefix: '/settings/payments', permission: 'PAYMENTS' },
   { prefix: '/settings/online-ordering', permission: 'MANAGE_ONLINE_ORDERING' },
+  { prefix: '/delivery', permission: 'VIEW_DELIVERY' },
   { prefix: '/dashboard/subscription', permission: 'SUBSCRIPTION_MANAGEMENT' },
 ];
 

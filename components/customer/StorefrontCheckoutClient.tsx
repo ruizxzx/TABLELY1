@@ -29,6 +29,27 @@ import {
   type CartItem,
 } from '@/lib/customer';
 
+async function getFulfillmentCheckoutIdempotencyKey(branchId: string, payload: unknown) {
+  const storageKey = `tablely:fulfillment:checkout-key:${branchId}`;
+  const serialized = JSON.stringify(payload);
+  let fingerprint = serialized;
+  try {
+    const digest = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(serialized));
+    fingerprint = Array.from(new Uint8Array(digest)).map((value) => value.toString(16).padStart(2, '0')).join('');
+  } catch {
+    // The random key remains reusable for this page session if WebCrypto is unavailable.
+  }
+  try {
+    const stored = JSON.parse(window.sessionStorage.getItem(storageKey) ?? 'null') as { fingerprint?: string; key?: string } | null;
+    if (stored?.key && stored.fingerprint === fingerprint) return stored.key;
+  } catch {
+    // Ignore corrupted session data and replace it with a fresh key.
+  }
+  const key = window.crypto.randomUUID();
+  window.sessionStorage.setItem(storageKey, JSON.stringify({ fingerprint, key }));
+  return key;
+}
+
 export default function StorefrontCheckoutClient({
   restaurantSlug,
 }: {
@@ -71,11 +92,21 @@ export default function StorefrontCheckoutClient({
   // Coupon & Payment
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'UPI' | 'ONLINE'>('CASH');
+  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'UPI'>('CASH');
 
   // Server-side calculation preview
   const [preview, setPreview] = useState<PublicFulfillmentCheckoutPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+
+  const cashPaymentAllowed = fulfillmentType === 'PICKUP' || context?.delivery_settings?.cod_enabled === true;
+  const upiPaymentAllowed = fulfillmentType === 'PICKUP' || context?.delivery_settings?.upi_on_delivery_enabled === true;
+
+  useEffect(() => {
+    if (paymentMethod === 'CASH' && cashPaymentAllowed) return;
+    if (paymentMethod === 'UPI' && upiPaymentAllowed) return;
+    if (cashPaymentAllowed) setPaymentMethod('CASH');
+    else if (upiPaymentAllowed) setPaymentMethod('UPI');
+  }, [fulfillmentType, context?.delivery_settings?.cod_enabled, context?.delivery_settings?.upi_on_delivery_enabled, cashPaymentAllowed, upiPaymentAllowed, paymentMethod]);
 
   // Initial load
   useEffect(() => {
@@ -164,6 +195,14 @@ export default function StorefrontCheckoutClient({
       setError('Please provide a valid 10-digit mobile number.');
       return;
     }
+    if (fulfillmentType === 'DELIVERY' && !cashPaymentAllowed && !upiPaymentAllowed) {
+      setError('This branch has not enabled cash or UPI collection on delivery. Contact the restaurant or choose Pickup.');
+      return;
+    }
+    if ((paymentMethod === 'CASH' && !cashPaymentAllowed) || (paymentMethod === 'UPI' && !upiPaymentAllowed)) {
+      setError('The selected payment method is not enabled for this fulfillment type.');
+      return;
+    }
     if (fulfillmentType === 'DELIVERY') {
       if (!house.trim() || !street.trim() || !pinCode.trim()) {
         setError('Complete delivery address (house/street/PIN code) is required.');
@@ -190,16 +229,29 @@ export default function StorefrontCheckoutClient({
             }
           : undefined;
 
+      const resolvedPaymentMethod = paymentMethod === 'UPI' ? `${fulfillmentType}_UPI` : `${fulfillmentType}_CASH`;
+      const checkoutPayload = {
+        branchId: context.branch_id,
+        fulfillmentType,
+        items: cart,
+        paymentMethod: resolvedPaymentMethod,
+        customerName: name.trim(),
+        customerPhone: phone.trim(),
+        customerEmail: email.trim() || undefined,
+        customerAddress: addressPayload,
+        deliveryPinCode: fulfillmentType === 'DELIVERY' ? pinCode.trim() : undefined,
+        deliveryInstructions: deliveryInstructions.trim() || undefined,
+        scheduledFor: isScheduled && scheduledTime ? new Date(scheduledTime).toISOString() : null,
+        couponCode: appliedCoupon || null,
+        customerNote: customerNote.trim() || undefined,
+      };
+      const idempotencyKey = await getFulfillmentCheckoutIdempotencyKey(context.branch_id, checkoutPayload);
       const orderResult = await createPublicFulfillmentOrder({
         branchId: context.branch_id,
         fulfillmentType,
         items: cart,
-        paymentMethod:
-          paymentMethod === 'ONLINE'
-            ? 'ONLINE_PREPAID'
-            : paymentMethod === 'UPI'
-            ? `${fulfillmentType}_UPI`
-            : `${fulfillmentType}_CASH`,
+        paymentMethod: resolvedPaymentMethod,
+        idempotencyKey,
         customerName: name.trim(),
         customerPhone: phone.trim(),
         customerEmail: email.trim() || undefined,
@@ -210,6 +262,15 @@ export default function StorefrontCheckoutClient({
         couponCode: appliedCoupon || null,
         customerNote: customerNote.trim() || undefined,
       });
+
+      const handoffCode = fulfillmentType === 'PICKUP' ? orderResult.pickup_code : orderResult.delivery_otp;
+      if (handoffCode) {
+        window.sessionStorage.setItem(
+          `tablely:fulfillment:handoff:${orderResult.tracking_token}`,
+          JSON.stringify(fulfillmentType === 'PICKUP' ? { pickup_code: handoffCode } : { delivery_otp: handoffCode }),
+        );
+      }
+      window.sessionStorage.removeItem(`tablely:fulfillment:checkout-key:${context.branch_id}`);
 
       // Clear local cart
       clearFulfillmentCart(context.branch_id);
@@ -485,35 +546,29 @@ export default function StorefrontCheckoutClient({
               <h2>Payment Method</h2>
 
               <div className="payment-options">
-                <label className="payment-card-label">
-                  <input
-                    type="radio"
-                    name="payment"
-                    value="CASH"
-                    checked={paymentMethod === 'CASH'}
-                    onChange={() => setPaymentMethod('CASH')}
-                  />
-                  <Banknote size={20} />
-                  <div>
-                    <strong>{fulfillmentType === 'PICKUP' ? 'Cash at Counter' : 'Cash on Delivery (COD)'}</strong>
-                    <small>Pay with cash upon receipt</small>
-                  </div>
-                </label>
-
-                <label className="payment-card-label">
-                  <input
-                    type="radio"
-                    name="payment"
-                    value="UPI"
-                    checked={paymentMethod === 'UPI'}
-                    onChange={() => setPaymentMethod('UPI')}
-                  />
-                  <Smartphone size={20} />
-                  <div>
-                    <strong>{fulfillmentType === 'PICKUP' ? 'UPI at Counter' : 'UPI on Delivery'}</strong>
-                    <small>GPay, PhonePe, Paytm upon collection</small>
-                  </div>
-                </label>
+                {cashPaymentAllowed ? (
+                  <label className="payment-card-label">
+                    <input type="radio" name="payment" value="CASH" checked={paymentMethod === 'CASH'} onChange={() => setPaymentMethod('CASH')} />
+                    <Banknote size={20} />
+                    <div>
+                      <strong>{fulfillmentType === 'PICKUP' ? 'Cash at Counter' : 'Cash on Delivery (COD)'}</strong>
+                      <small>Pay with cash upon receipt</small>
+                    </div>
+                  </label>
+                ) : null}
+                {upiPaymentAllowed ? (
+                  <label className="payment-card-label">
+                    <input type="radio" name="payment" value="UPI" checked={paymentMethod === 'UPI'} onChange={() => setPaymentMethod('UPI')} />
+                    <Smartphone size={20} />
+                    <div>
+                      <strong>{fulfillmentType === 'PICKUP' ? 'UPI at Counter' : 'UPI on Delivery'}</strong>
+                      <small>GPay, PhonePe, Paytm upon collection</small>
+                    </div>
+                  </label>
+                ) : null}
+                {!cashPaymentAllowed && !upiPaymentAllowed ? (
+                  <div className="checkout-inline-warning" role="alert">The restaurant has not enabled any payment-on-delivery method yet. Choose Pickup or contact the restaurant.</div>
+                ) : null}
               </div>
             </section>
           </div>

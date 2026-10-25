@@ -43,8 +43,6 @@ type DeliveryOrder = {
     pin_code?: string;
   } | null;
   delivery_instructions: string | null;
-  pickup_code: string | null;
-  delivery_otp: string | null;
   assigned_staff_id: string | null;
   assigned_staff_name: string | null;
   promised_ready_at: string | null;
@@ -78,8 +76,10 @@ export default function DeliveryDispatchPage() {
 
   // Delivery confirmation modal
   const [confirmTarget, setConfirmTarget] = useState<DeliveryOrder | null>(null);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
   const [enteredOtp, setEnteredOtp] = useState('');
   const [isManagerOverride, setIsManagerOverride] = useState(false);
+  const [overrideReason, setOverrideReason] = useState('Customer identity verified in person.');
   const [confirming, setConfirming] = useState(false);
 
   // Failed delivery modal
@@ -87,10 +87,17 @@ export default function DeliveryDispatchPage() {
   const [failReason, setFailReason] = useState('Customer unreachable');
   const [failing, setFailing] = useState(false);
 
+  // Retry / return workflow
+  const [returnTarget, setReturnTarget] = useState<DeliveryOrder | null>(null);
+  const [returnReason, setReturnReason] = useState('Customer unavailable at the delivery address.');
+  const [returnNotes, setReturnNotes] = useState('');
+
   // Payment collection modal
   const [collectTarget, setCollectTarget] = useState<DeliveryOrder | null>(null);
   const [collectMethod, setCollectMethod] = useState<'CASH' | 'UPI'>('CASH');
   const [collectAmount, setCollectAmount] = useState<number>(0);
+  const [collectReference, setCollectReference] = useState('');
+  const [collectError, setCollectError] = useState<string | null>(null);
   const [collecting, setCollecting] = useState(false);
 
   async function loadData() {
@@ -109,66 +116,15 @@ export default function DeliveryDispatchPage() {
           p_branch_id: bId,
           p_type: 'DELIVERY',
         }),
-        supabase.from('staff').select('id,full_name,role').eq('branch_id', bId).eq('active', true),
+        supabase.rpc('fulfillment_list_eligible_riders', { p_branch_id: bId }),
       ]);
+      if (ordersRes.error) throw ordersRes.error;
+      if (staffRes.error) throw staffRes.error;
+      const fetchedOrders: DeliveryOrder[] = (ordersRes.data ?? []) as DeliveryOrder[];
+      setStaffList((staffRes.data ?? []) as BranchStaff[]);
 
-      let fetchedOrders: DeliveryOrder[] = [];
-      if (!ordersRes.error && ordersRes.data) {
-        fetchedOrders = ordersRes.data as DeliveryOrder[];
-      } else {
-        // Resilient fallback to direct orders query if RPC is pending migration
-        const { data: directOrders, error: dErr } = await supabase
-          .from('orders')
-          .select('id,order_number,customer_name,customer_phone,fulfillment_type,status,payment_status,payment_method,total,created_at')
-          .eq('branch_id', bId)
-          .eq('fulfillment_type', 'DELIVERY')
-          .order('created_at', { ascending: false })
-          .limit(100);
-
-        if (!dErr && directOrders) {
-          const orderIds = directOrders.map((o) => o.id);
-          const { data: ofdList } = await supabase
-            .from('order_fulfillment_details')
-            .select('*')
-            .in('order_id', orderIds);
-
-          const ofdMap = new Map((ofdList ?? []).map((f) => [f.order_id, f]));
-
-          fetchedOrders = directOrders.map((o) => {
-            const f = ofdMap.get(o.id);
-            return {
-              order_id: o.id,
-              order_number: o.order_number,
-              customer_name: f?.customer_name_snapshot || o.customer_name || 'Customer',
-              customer_phone: f?.customer_phone_snapshot || o.customer_phone || '—',
-              fulfillment_type: o.fulfillment_type || 'DELIVERY',
-              fulfillment_status: f?.fulfillment_status || 'WAITING_FOR_DRIVER',
-              order_status: o.status,
-              payment_status: o.payment_status,
-              payment_method: o.payment_method,
-              total: Number(o.total),
-              delivery_fee: Number(f?.delivery_fee_snapshot ?? 0),
-              address_snapshot: f?.address_snapshot ?? null,
-              delivery_instructions: f?.delivery_instructions ?? null,
-              pickup_code: f?.pickup_code_display ?? null,
-              delivery_otp: f?.delivery_otp_display ?? null,
-              assigned_staff_id: f?.assigned_staff_id ?? null,
-              assigned_staff_name: null,
-              promised_ready_at: f?.promised_ready_at ?? null,
-              promised_delivery_at: f?.promised_delivery_at ?? null,
-              created_at: o.created_at,
-              items_count: 0,
-            };
-          });
-        } else if (ordersRes.error) {
-          throw ordersRes.error;
-        }
-      }
 
       setOrders(fetchedOrders);
-      if (staffRes.data) {
-        setStaffList(staffRes.data as BranchStaff[]);
-      }
     } catch (err: unknown) {
       const msg =
         (err as { message?: string })?.message ??
@@ -209,9 +165,9 @@ export default function DeliveryDispatchPage() {
 
       let matchesTab = true;
       if (activeTab === 'UNASSIGNED') {
-        matchesTab = o.fulfillment_status === 'WAITING_FOR_DRIVER';
+        matchesTab = o.fulfillment_status === 'WAITING_FOR_DRIVER' || (o.fulfillment_status === 'READY_FOR_DISPATCH' && !o.assigned_staff_id);
       } else if (activeTab === 'ASSIGNED') {
-        matchesTab = o.fulfillment_status === 'ASSIGNED';
+        matchesTab = o.fulfillment_status === 'ASSIGNED' || (o.fulfillment_status === 'READY_FOR_DISPATCH' && Boolean(o.assigned_staff_id));
       } else if (activeTab === 'OUT_FOR_DELIVERY') {
         matchesTab = o.fulfillment_status === 'OUT_FOR_DELIVERY';
       } else if (activeTab === 'DELIVERED') {
@@ -238,7 +194,25 @@ export default function DeliveryDispatchPage() {
       setAssignTarget(null);
       void loadData();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Could not assign rider.');
+      const error = typeof err === 'object' && err !== null ? err as { code?: unknown; message?: unknown } : null;
+      const code = typeof error?.code === 'string' ? error.code : null;
+      const message = typeof error?.message === 'string' ? error.message : '';
+      alert(code === '42703'
+        ? 'Rider assignment database function is outdated. Apply the latest database migration, then retry.'
+        : code === 'PGRST202'
+          ? 'Rider assignment function is unavailable. Apply the latest database migration, then retry.'
+          : code === '42501'
+            ? 'You do not have permission to assign this delivery or the selected staff member is not eligible.'
+            : code === 'P0001' && [
+              'Delivery order not found',
+              'Order cannot be assigned in its current state',
+              'Delivery is not eligible for assignment',
+              'Active delivery staff member not found in this branch',
+              'Selected staff member is not authorized for delivery work',
+              'Permission denied: ASSIGN_DELIVERY required',
+            ].includes(message)
+              ? message
+              : 'Could not assign rider. Refresh the board and verify the order and staff eligibility.');
     } finally {
       setAssigning(false);
     }
@@ -262,16 +236,42 @@ export default function DeliveryDispatchPage() {
     if (!supabase || !confirmTarget) return;
     setConfirming(true);
     try {
-      const { error: err } = await supabase.rpc('fulfillment_confirm_delivered', {
+      const { data: confirmed, error: err } = await supabase.rpc('fulfillment_confirm_delivered', {
         p_order_id: confirmTarget.order_id,
         p_delivery_otp: isManagerOverride ? null : enteredOtp.trim(),
         p_manager_override: isManagerOverride,
+        p_override_reason: isManagerOverride ? overrideReason.trim() : null,
       });
       if (err) throw err;
+      if (confirmed !== true) {
+        setConfirmError('Delivery OTP is invalid, expired, or has reached the verification attempt limit. Ask a manager to verify the customer.');
+        return;
+      }
       setConfirmTarget(null);
+      setConfirmError(null);
+      setEnteredOtp('');
+      setIsManagerOverride(false);
+      setOverrideReason('Customer identity verified in person.');
       void loadData();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Could not confirm delivery.');
+      const error = typeof err === 'object' && err !== null ? err as { code?: unknown; message?: unknown } : null;
+      const code = typeof error?.code === 'string' ? error.code : null;
+      const message = typeof error?.message === 'string' ? error.message : '';
+      setConfirmError(code === 'PGRST202'
+        ? 'Delivery confirmation function is unavailable. Apply the latest database migration.'
+        : code === '42703'
+          ? 'Delivery confirmation schema is outdated. Apply the latest database migration.'
+          : code === '42501' && message === 'Only the assigned authorized delivery person can confirm delivery'
+            ? 'Only the assigned delivery employee can confirm with the customer OTP. A manager with delivery permissions can use Manager Override.'
+            : code === '42501' && message === 'Manager override requires MANAGE_DELIVERY permission'
+              ? 'You need Manage Delivery permission to use Manager Override.'
+              : code === 'P0001' && [
+                'Only dispatched orders can be delivered',
+                'Order cannot be delivered in its current state',
+                'Manager override requires an audit reason of at least 8 characters',
+              ].includes(message)
+                ? message
+                : 'Could not confirm delivery. Refresh the board and verify that the order is dispatched and assigned before retrying.');
     } finally {
       setConfirming(false);
     }
@@ -296,21 +296,101 @@ export default function DeliveryDispatchPage() {
     }
   }
 
+  async function handleRetryDelivery(order: DeliveryOrder) {
+    if (!supabase) return;
+    try {
+      const { error: err } = await supabase.rpc('fulfillment_retry_delivery', {
+        p_order_id: order.order_id,
+        p_reason: 'Delivery retried after a failed attempt.',
+      });
+      if (err) throw err;
+      void loadData();
+    } catch (err: unknown) {
+      const error = typeof err === 'object' && err !== null ? err as { code?: unknown; message?: unknown } : null;
+      const code = typeof error?.code === 'string' ? error.code : null;
+      const message = typeof error?.message === 'string' ? error.message : '';
+      alert(code === '42501'
+        ? 'You do not have permission to retry this delivery.'
+        : code === 'PGRST202'
+          ? 'Delivery retry function is unavailable. Apply the latest database migration.'
+          : code === 'P0001' && [
+            'Delivery order not found',
+            'Order cannot be retried in its current state',
+            'Only failed or returned deliveries can be retried',
+            'Permission denied: delivery retry requires delivery management or assigned rider permissions',
+          ].includes(message)
+            ? message
+            : 'Could not retry delivery. Refresh the board and check the order status before trying again.');
+    }
+  }
+
+  async function handleReturnToRestaurant(e: React.FormEvent) {
+    e.preventDefault();
+    if (!supabase || !returnTarget) return;
+    try {
+      const { error: err } = await supabase.rpc('fulfillment_return_to_restaurant', {
+        p_order_id: returnTarget.order_id,
+        p_reason: returnReason,
+        p_notes: returnNotes,
+      });
+      if (err) throw err;
+      setReturnTarget(null);
+      setReturnReason('Customer unavailable at the delivery address.');
+      setReturnNotes('');
+      void loadData();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Could not mark the order as returned to the restaurant.');
+    }
+  }
+
   async function handleCollectPayment(e: React.FormEvent) {
     e.preventDefault();
     if (!supabase || !collectTarget) return;
+    const reference = collectReference.trim();
+    if (collectMethod === 'UPI' && !reference) {
+      setCollectError('Enter the UPI reference or UTR to record this payment.');
+      return;
+    }
+    if (!Number.isFinite(collectAmount) || Math.round(collectAmount * 100) !== Math.round(Number(collectTarget.total) * 100)) {
+      setCollectError('Amount collected must exactly match the order total.');
+      return;
+    }
     setCollecting(true);
+    setCollectError(null);
     try {
       const { error: err } = await supabase.rpc('fulfillment_collect_payment', {
         p_order_id: collectTarget.order_id,
         p_method: collectMethod,
         p_amount: collectAmount,
+        p_reference: collectMethod === 'UPI' ? reference : null,
+        p_reference_source: collectMethod === 'UPI' ? 'STAFF_CONFIRMED' : null,
       });
       if (err) throw err;
       setCollectTarget(null);
+      setCollectReference('');
+      setCollectError(null);
       void loadData();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Could not record payment collection.');
+      const error = typeof err === 'object' && err !== null ? err as { code?: unknown; message?: unknown } : null;
+      const code = typeof error?.code === 'string' ? error.code : null;
+      const message = typeof error?.message === 'string' ? error.message : '';
+      setCollectError(code === 'PGRST202'
+        ? 'Payment collection function is unavailable. Apply the latest database migration.'
+        : code === '42703'
+          ? 'Payment collection schema is outdated. Apply the latest database migration.'
+          : code === '42501'
+            ? 'You do not have permission to collect this delivery payment.'
+            : code === '23505'
+              ? 'A payment record already exists for this order. Refresh the board and verify payment status before retrying.'
+              : code === 'P0001' && [
+                'UPI collections require a UTR or payment reference',
+                'Collected amount must exactly match the order total',
+                'Payment was already settled through another payment flow',
+                'Only finance, fulfillment managers, or authorized assigned delivery staff can collect payment',
+                'Cancelled or refunded orders cannot collect payment',
+              ].includes(message)
+                ? message
+                : 'Could not record payment. Refresh the order and verify its payment status before retrying.');
     } finally {
       setCollecting(false);
     }
@@ -392,14 +472,14 @@ export default function DeliveryDispatchPage() {
             className={`button ${activeTab === 'UNASSIGNED' ? 'button-primary' : 'button-light'} compact`}
             onClick={() => setActiveTab('UNASSIGNED')}
           >
-            Awaiting Rider ({orders.filter((o) => o.fulfillment_status === 'WAITING_FOR_DRIVER').length})
+            Awaiting Rider ({orders.filter((o) => o.fulfillment_status === 'WAITING_FOR_DRIVER' || (o.fulfillment_status === 'READY_FOR_DISPATCH' && !o.assigned_staff_id)).length})
           </button>
           <button
             type="button"
             className={`button ${activeTab === 'ASSIGNED' ? 'button-primary' : 'button-light'} compact`}
             onClick={() => setActiveTab('ASSIGNED')}
           >
-            Assigned ({orders.filter((o) => o.fulfillment_status === 'ASSIGNED').length})
+            Assigned ({orders.filter((o) => o.fulfillment_status === 'ASSIGNED' || (o.fulfillment_status === 'READY_FOR_DISPATCH' && Boolean(o.assigned_staff_id))).length})
           </button>
           <button
             type="button"
@@ -500,7 +580,7 @@ export default function DeliveryDispatchPage() {
               <span>{o.items_count} items</span>
               <strong>{formatMoney(Number(o.total))}</strong>
               <span style={{ fontSize: 11, fontWeight: 600, color: o.payment_status === 'PAID' ? '#166534' : '#b45309' }}>
-                {o.payment_status === 'PAID' ? 'PAID ONLINE' : 'COLLECT CASH / UPI'}
+                {o.payment_status === 'PAID' ? 'PAID' : 'COLLECT CASH / UPI'}
               </span>
             </div>
 
@@ -509,16 +589,11 @@ export default function DeliveryDispatchPage() {
               <span>
                 Rider: <b>{o.assigned_staff_name || 'Unassigned'}</b>
               </span>
-              {o.delivery_otp && (
-                <span style={{ fontSize: 11, color: '#64748b' }} title="Customer will provide this code on delivery">
-                  OTP: ****
-                </span>
-              )}
             </div>
 
             {/* Action Buttons */}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 'auto' }}>
-              {o.fulfillment_status === 'WAITING_FOR_DRIVER' && (
+              {(o.fulfillment_status === 'WAITING_FOR_DRIVER' || (o.fulfillment_status === 'READY_FOR_DISPATCH' && !o.assigned_staff_id)) && staffList.length > 0 && (
                 <button
                   type="button"
                   className="button button-primary compact"
@@ -531,7 +606,7 @@ export default function DeliveryDispatchPage() {
                 </button>
               )}
 
-              {o.fulfillment_status === 'ASSIGNED' && (
+              {o.fulfillment_status === 'READY_FOR_DISPATCH' && o.assigned_staff_id && (
                 <>
                   <button
                     type="button"
@@ -553,6 +628,24 @@ export default function DeliveryDispatchPage() {
                 </>
               )}
 
+              {o.fulfillment_status === 'ASSIGNED' && o.assigned_staff_id ? (
+                <>
+                  <span className="notice notice-info" role="status" style={{ margin: 0, fontSize: 12 }}>
+                    Assigned. Waiting for the kitchen to mark this order READY; dispatch will be available then.
+                  </span>
+                  <button
+                    type="button"
+                    className="button button-light compact"
+                    onClick={() => {
+                      setAssignTarget(o);
+                      setSelectedStaffId(o.assigned_staff_id || staffList[0]?.id || '');
+                    }}
+                  >
+                    Reassign
+                  </button>
+                </>
+              ) : null}
+
               {o.fulfillment_status === 'OUT_FOR_DELIVERY' && (
                 <>
                   <button
@@ -562,6 +655,7 @@ export default function DeliveryDispatchPage() {
                       setConfirmTarget(o);
                       setEnteredOtp('');
                       setIsManagerOverride(false);
+                      setConfirmError(null);
                     }}
                   >
                     <CheckCircle2 size={13} /> Confirm Delivered
@@ -579,6 +673,29 @@ export default function DeliveryDispatchPage() {
                 </>
               )}
 
+              {(o.fulfillment_status === 'DELIVERY_FAILED' || o.fulfillment_status === 'RETURNED_TO_RESTAURANT') && (
+                <>
+                  <button
+                    type="button"
+                    className="button button-primary compact"
+                    onClick={() => void handleRetryDelivery(o)}
+                  >
+                    <RefreshCw size={13} /> Retry Delivery
+                  </button>
+                  <button
+                    type="button"
+                    className="button button-light compact"
+                    onClick={() => {
+                      setReturnTarget(o);
+                      setReturnReason('Customer unavailable at the delivery address.');
+                      setReturnNotes('');
+                    }}
+                  >
+                    <ArrowRight size={13} /> Return to Restaurant
+                  </button>
+                </>
+              )}
+
               {o.fulfillment_status === 'DELIVERED' && o.payment_status !== 'PAID' && (
                 <button
                   type="button"
@@ -587,6 +704,8 @@ export default function DeliveryDispatchPage() {
                     setCollectTarget(o);
                     setCollectAmount(Number(o.total));
                     setCollectMethod('CASH');
+                    setCollectReference('');
+                    setCollectError(null);
                   }}
                 >
                   Collect Payment (₹{o.total})
@@ -660,6 +779,7 @@ export default function DeliveryDispatchPage() {
               <p style={{ fontSize: 13, color: '#475569', margin: 0 }}>
                 Order #{confirmTarget.order_number} · Enter customer delivery OTP or use manager override.
               </p>
+              {confirmError ? <div className="notice notice-error" role="alert">{confirmError}</div> : null}
 
               {!isManagerOverride ? (
                 <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13 }}>
@@ -689,6 +809,12 @@ export default function DeliveryDispatchPage() {
                 />
                 <span>Manager Override (Customer phone unavailable)</span>
               </label>
+              {isManagerOverride ? (
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13 }}>
+                  Manager override reason (required)
+                  <input minLength={8} required value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} />
+                </label>
+              ) : null}
 
               <div className="modal-actions" style={{ marginTop: 12 }}>
                 <button type="button" className="button button-light" onClick={() => setConfirmTarget(null)}>
@@ -742,6 +868,43 @@ export default function DeliveryDispatchPage() {
         </div>
       )}
 
+      {/* Return to Restaurant Modal */}
+      {returnTarget && (
+        <div className="modal-backdrop" onClick={() => setReturnTarget(null)}>
+          <div className="modal-card compact-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>Return order to restaurant</h2>
+              <button type="button" className="icon-button" onClick={() => setReturnTarget(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleReturnToRestaurant} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <p style={{ fontSize: 13, color: '#475569', margin: 0 }}>
+                Order #{returnTarget.order_number} · Capture the reason and any rider notes before the order is reassigned.
+              </p>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13 }}>
+                Return reason:
+                <select value={returnReason} onChange={(e) => setReturnReason(e.target.value)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1' }}>
+                  <option value="Customer unavailable at the delivery address.">Customer unavailable</option>
+                  <option value="Address was incorrect or inaccessible.">Incorrect address</option>
+                  <option value="Customer refused the parcel.">Customer refused</option>
+                  <option value="The rider could not complete the route.">Delivery rider unavailable</option>
+                  <option value="The parcel was returned to the restaurant for review.">Returned to restaurant</option>
+                </select>
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13 }}>
+                Return notes:
+                <textarea value={returnNotes} onChange={(e) => setReturnNotes(e.target.value)} rows={3} placeholder="Add rider notes or customer callback details..." style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1' }} />
+              </label>
+              <div className="modal-actions" style={{ marginTop: 12 }}>
+                <button type="button" className="button button-light" onClick={() => setReturnTarget(null)}>Cancel</button>
+                <button type="submit" className="button button-primary">Mark Returned</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Payment Collection Modal */}
       {collectTarget && (
         <div className="modal-backdrop" onClick={() => setCollectTarget(null)}>
@@ -775,12 +938,30 @@ export default function DeliveryDispatchPage() {
                 <input
                   type="number"
                   required
-                  min={collectTarget.total}
+                  min="0"
+                  step="0.01"
                   value={collectAmount}
                   onChange={(e) => setCollectAmount(Number(e.target.value))}
                   style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1' }}
                 />
               </label>
+
+              {collectMethod === 'UPI' ? (
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13 }}>
+                  UPI reference / UTR:
+                  <input
+                    type="text"
+                    required
+                    maxLength={128}
+                    value={collectReference}
+                    onChange={(e) => setCollectReference(e.target.value)}
+                    placeholder="Enter payment reference"
+                    style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1' }}
+                  />
+                </label>
+              ) : null}
+
+              {collectError ? <div className="notice notice-error" role="alert">{collectError}</div> : null}
 
               <div className="modal-actions" style={{ marginTop: 12 }}>
                 <button type="button" className="button button-light" onClick={() => setCollectTarget(null)}>

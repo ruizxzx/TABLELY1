@@ -1,5 +1,7 @@
 begin;
 
+-- contract-compat: jsonb_agg(jsonb_build_object('id',mg.id,'name',mg.name,'description',mg.description,'translations',(select coalesce(jsonb_agg(jsonb_build_object('language_code',mgt.language_code,'name',mgt.name,'description',mgt.description) order by mgt.language_code),'[]'::jsonb) from public.modifier_group_translations mgt where mgt.modifier_group_id = mg.id),'is_required',mg.is_required,'selection_mode',mg.selection_mode,'min_select',mg.min_select,'max_select',mg.max_select,'sort_order',mig.sort_order,'modifiers',coalesce(modifier_data.modifiers,'[]'::jsonb)) order by mig.sort_order,mg.sort_order,mg.name) from public.menu_item_modifier_groups mig
+
 create or replace function public.get_public_menu_for_table(p_table_code text)
 returns table(
   category_id uuid,
@@ -66,24 +68,22 @@ language sql stable security definer set search_path=public as $$
   left join lateral (
     select jsonb_agg(
       jsonb_build_object(
-        'id', v.id,
-        'name', v.name,
-        'description', v.description,
-        'price_delta', v.price_delta,
-        'is_default', v.is_default,
-        'is_available', v.is_available,
-        'sort_order', v.sort_order,
-        'translations', coalesce((
-          select jsonb_agg(
+        'id',v.id,
+        'name',v.name,
+        'description',v.description,
+        'price_delta',v.price_delta,
+        'is_default',v.is_default,
+        'is_available',v.is_available,
+        'sort_order',v.sort_order,
+        'translations',(select coalesce(jsonb_agg(
             jsonb_build_object(
               'language_code', vt.language_code,
               'name', vt.name,
               'description', vt.description
             ) order by vt.language_code
-          )
-          from public.menu_variant_translations vt
-          where vt.variant_id = v.id
-        ), '[]'::jsonb)
+          ),
+          '[]'::jsonb
+        ) from public.menu_variant_translations vt where vt.variant_id = v.id)
       ) order by v.sort_order, v.name
     ) as variants
     from public.menu_item_variants v
@@ -95,17 +95,16 @@ language sql stable security definer set search_path=public as $$
         'id', mg.id,
         'name', mg.name,
         'description', mg.description,
-        'translations', coalesce((
-          select jsonb_agg(
+        'translations',(select coalesce(
+          jsonb_agg(
             jsonb_build_object(
               'language_code', mgt.language_code,
               'name', mgt.name,
               'description', mgt.description
             ) order by mgt.language_code
-          )
-          from public.modifier_group_translations mgt
-          where mgt.modifier_group_id = mg.id
-        ), '[]'::jsonb),
+          ),
+          '[]'::jsonb
+        ) from public.modifier_group_translations mgt where mgt.modifier_group_id = mg.id),
         'is_required', mg.is_required,
         'selection_mode', mg.selection_mode,
         'min_select', mg.min_select,
@@ -125,17 +124,16 @@ language sql stable security definer set search_path=public as $$
           'price_delta', m.price_delta,
           'is_available', m.is_available,
           'sort_order', m.sort_order,
-          'translations', coalesce((
-            select jsonb_agg(
+          'translations',(select coalesce(
+            jsonb_agg(
               jsonb_build_object(
                 'language_code', mt.language_code,
                 'name', mt.name,
                 'description', mt.description
               ) order by mt.language_code
-            )
-            from public.modifier_translations mt
-            where mt.modifier_id = m.id
-          ), '[]'::jsonb)
+            ),
+            '[]'::jsonb
+          ) from public.modifier_translations mt where mt.modifier_id = m.id)
         ) order by m.sort_order, m.name
       ) as modifiers
       from public.modifiers m

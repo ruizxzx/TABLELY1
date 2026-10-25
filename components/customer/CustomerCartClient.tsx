@@ -1,10 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { Minus, Plus, Trash2, Tag, Loader2, X, ShoppingBag } from 'lucide-react';
+import { Minus, Plus, Trash2, Tag, Loader2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { CustomerFrame, CustomerBack } from './CustomerLayout';
-import { cartStorageKey, couponStorageKey, getPublicTableContext, previewPublicCheckout, type CartItem, readCart, saveCart, readCouponCode, saveCouponCode, clearCouponCode, formatMoney, type PublicCheckoutPreview, saveFulfillmentCart } from '@/lib/customer';
+import { cartStorageKey, couponStorageKey, getPublicTableContext, previewPublicCheckout, type CartItem, readCart, saveCart, readCouponCode, saveCouponCode, clearCouponCode, formatMoney, type PublicCheckoutPreview } from '@/lib/customer';
 
 export default function CustomerCartClient({ restaurantSlug, tableCode }: { restaurantSlug: string; tableCode: string }) {
   const [context, setContext] = useState<Awaited<ReturnType<typeof getPublicTableContext>> | null>(null);
@@ -53,14 +53,6 @@ export default function CustomerCartClient({ restaurantSlug, tableCode }: { rest
   }
   function removeCoupon(){clearCouponCode(tableCode);setCoupon('');setCouponInput('');setError(null);}
 
-  function switchToPickup() {
-    if (!context) return;
-    if (cart.length > 0) {
-      saveFulfillmentCart(context.branch_id, cart);
-    }
-    window.location.href = `/r/${restaurantSlug}/order/checkout?branchId=${encodeURIComponent(context.branch_id)}&type=PICKUP`;
-  }
-
   if (!context) return <main className="customer-page customer-loading">{error ?? 'Loading cart…'}</main>;
   const subtotal = preview?.subtotal ?? cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const discount = preview?.discount ?? 0;
@@ -70,15 +62,6 @@ export default function CustomerCartClient({ restaurantSlug, tableCode }: { rest
     <CustomerFrame restaurantName={context.restaurant_name} tableNumber={context.table_number} tableCode={context.table_code} restaurantSlug={context.restaurant_slug}>
       <div className="customer-content customer-cart-page">
         <CustomerBack href={`/r/${restaurantSlug}/table/${tableCode}`} label="Menu" />
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, margin: '8px 0 16px', padding: '12px 16px', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#065f46', fontSize: 13, fontWeight: 500 }}>
-            <ShoppingBag size={18} color="#059669" />
-            <span>Want takeaway instead? Order for <strong>Self-Pickup</strong>.</span>
-          </div>
-          <button type="button" onClick={switchToPickup} style={{ background: '#059669', color: '#ffffff', border: 'none', padding: '7px 14px', borderRadius: 6, fontWeight: 600, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            Switch to Pickup →
-          </button>
-        </div>
         <div className="customer-page-title"><span className="customer-eyebrow">TABLE {context.table_number}</span><h1>Your order</h1><p>{cart.length} line item{cart.length === 1 ? '' : 's'}</p></div>
         {error ? <div className="notice notice-error" role="alert">{error}</div> : null}
         {cart.length === 0 ? (

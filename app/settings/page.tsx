@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { CreditCard, ReceiptText, LogOut, ShieldCheck, Palette, Globe2, Shield, BadgeCheck, Bell, Tag, MessageSquare, AlertTriangle, Bike } from 'lucide-react';
+import { CreditCard, ReceiptText, LogOut, ShieldCheck, Palette, Globe2, Shield, BadgeCheck, Bell, Tag, MessageSquare, AlertTriangle, Bike, Copy, ExternalLink } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { StudioShell } from '@/components/StudioShell';
@@ -18,6 +18,8 @@ export default function SettingsPage(){
  const[role,setRole]=useState<string>('');
  const[permissions,setPermissions]=useState<Permissions>({});
  const[features,setFeatures]=useState<Permissions>({});
+ const[shareLink,setShareLink]=useState('');
+ const[copied,setCopied]=useState(false);
  const[feedbackOpen,setFeedbackOpen]=useState(false);
  useEffect(()=>{
    const s=getSupabaseBrowserClient();
@@ -28,6 +30,10 @@ export default function SettingsPage(){
      if(!active || !context.data)return;
      const staff=context.data.staff;
      setRole(staff.role);
+     const publicUrl = typeof window !== 'undefined'
+       ? new URL(`/r/${encodeURIComponent(context.data.organization.slug)}/order/${encodeURIComponent(context.data.branch.id)}`, window.location.origin).toString()
+       : '';
+     setShareLink(publicUrl);
      if(staff.role !== 'OWNER') {
        const {data}=await s.from('staff_permissions').select('permission,allowed').eq('staff_id',staff.id);
        if(!active)return;
@@ -46,11 +52,13 @@ export default function SettingsPage(){
  const can=(permission:string)=>owner || permissions[permission]===true;
  const canOnlinePayments=owner || (permissions.PAYMENTS===true && features.ONLINE_PAYMENTS!==false);
  async function signOut(){const s=getSupabaseBrowserClient();if(!s)return;setBusy(true);setError(null);const{error:e}=await s.auth.signOut();if(e){setError(e.message);setBusy(false);return}router.replace('/login');router.refresh();}
+ async function copyShareLink(){ if(!shareLink) return; try { await navigator.clipboard.writeText(shareLink); setCopied(true); window.setTimeout(()=>setCopied(false),1500); } catch { setError('Could not copy the ordering link.'); } }
  return <StudioShell><SectionHeader eyebrow="SETTINGS" title="Settings" description="Restaurant configuration, payments and your account."/><div className="settings-grid">
    {canOnlinePayments?<Link className="surface-card settings-tile" href="/settings/payments"><CreditCard size={20}/><div><strong>Online payments</strong><span>Configure branch-specific Razorpay payments and safe fallback defaults.</span></div></Link>:null}
    {can('CHARGES')?<Link className="surface-card settings-tile" href="/settings/charges"><ReceiptText size={20}/><div><strong>Checkout charges</strong><span>Configure branch-specific GST, platform and other customer charges.</span></div></Link>:null}
    {owner || can('MANAGE_ONLINE_ORDERING')?<Link className="surface-card settings-tile" href="/settings/online-ordering"><Bike size={20}/><div><strong>Online Ordering & Fulfillment</strong><span>Pickup, delivery zones, packaging charges, order limits and schedule settings.</span></div></Link>:null}
    {can('DISCOUNTS_COUPONS')?<Link className="surface-card settings-tile" href="/settings/coupons"><Tag size={20}/><div><strong>Coupons & offers</strong><span>{owner?'Create discounts, limits, scopes and customer-facing promotions.':'Manage discounts and offers for your branch.'}</span></div></Link>:null}
+   {shareLink ? <section className="surface-card settings-tile"><Globe2 size={20}/><div><strong>Customer ordering link</strong><span>Share this link so customers can open your restaurant and place delivery or pickup orders.</span><code style={{display:'block',marginTop:10,padding:'8px 10px',borderRadius:8,background:'#f5f5f4',wordBreak:'break-all',fontSize:11,color:'#111'}}>{shareLink}</code><div className="button-row" style={{marginTop:12}}><a className="button button-primary compact" href={shareLink} target="_blank" rel="noreferrer"><ExternalLink size={14}/> Open link</a><button type="button" className="button button-light compact" onClick={()=>void copyShareLink()}><Copy size={14}/>{copied ? 'Copied' : 'Copy link'}</button></div></div></section> : null}
    <Link className="surface-card settings-tile" href="/settings/branding"><Palette size={20}/><div><strong>Branding studio</strong><span>Restaurant logo, colors and customer-facing menu theme.</span></div></Link>
    <button className="surface-card settings-tile settings-tile-button" type="button" onClick={()=>setFeedbackOpen(true)}><MessageSquare size={20}/><div><strong>Report a problem / suggest an idea</strong><span>Send feedback directly to the Tablely admin team.</span></div></button>
    {owner?<><Link className="surface-card settings-tile" href="/settings/domain"><Globe2 size={20}/><div><strong>Custom domain</strong><span>Configure and verify a Pro customer-facing hostname.</span></div></Link><Link className="surface-card settings-tile" href="/staff/permissions"><Shield size={20}/><div><strong>Advanced permissions</strong><span>Fine-grained access controls for staff.</span></div></Link><Link className="surface-card settings-tile" href="/settings/notifications"><Bell size={20}/><div><strong>Notification preferences</strong><span>Choose which branches can notify the Owner account.</span></div></Link></>:null}

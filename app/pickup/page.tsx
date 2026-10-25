@@ -36,7 +36,6 @@ type PickupOrder = {
   payment_status: string;
   payment_method: string | null;
   total: number;
-  pickup_code: string | null;
   promised_ready_at: string | null;
   created_at: string;
   items_count: number;
@@ -63,6 +62,9 @@ export default function PickupManagementPage() {
   const [handoverTarget, setHandoverTarget] = useState<PickupOrder | null>(null);
   const [enteredCode, setEnteredCode] = useState('');
   const [managerOverride, setManagerOverride] = useState(false);
+  const [overrideReason, setOverrideReason] = useState('Customer identity verified in person.');
+  const [handoverPaymentMethod, setHandoverPaymentMethod] = useState<'CASH' | 'UPI'>('CASH');
+  const [handoverPaymentReference, setHandoverPaymentReference] = useState('');
   const [submittingHandover, setSubmittingHandover] = useState(false);
   const [handoverError, setHandoverError] = useState<string | null>(null);
 
@@ -78,57 +80,13 @@ export default function PickupManagementPage() {
       setBranchId(bId);
       setBranchName(context.data.branch.name);
 
-      // Try RPC first
       const ordersRes = await supabase.rpc('fulfillment_list_branch_orders', {
         p_branch_id: bId,
         p_type: 'PICKUP',
       });
+      if (ordersRes.error) throw ordersRes.error;
+      let fetchedOrders: PickupOrder[] = (ordersRes.data ?? []) as PickupOrder[];
 
-      let fetchedOrders: PickupOrder[] = [];
-      if (!ordersRes.error && ordersRes.data) {
-        fetchedOrders = ordersRes.data as PickupOrder[];
-      } else {
-        // Fallback to direct query
-        const { data: directOrders, error: dErr } = await supabase
-          .from('orders')
-          .select('id,order_number,customer_name,customer_phone,fulfillment_type,status,payment_status,payment_method,total,created_at')
-          .eq('branch_id', bId)
-          .eq('fulfillment_type', 'PICKUP')
-          .order('created_at', { ascending: false })
-          .limit(100);
-
-        if (!dErr && directOrders) {
-          const orderIds = directOrders.map((o) => o.id);
-          const { data: ofdList } = await supabase
-            .from('order_fulfillment_details')
-            .select('*')
-            .in('order_id', orderIds);
-
-          const ofdMap = new Map((ofdList ?? []).map((f) => [f.order_id, f]));
-
-          fetchedOrders = directOrders.map((o) => {
-            const f = ofdMap.get(o.id);
-            return {
-              order_id: o.id,
-              order_number: o.order_number,
-              customer_name: f?.customer_name_snapshot || o.customer_name || 'Customer',
-              customer_phone: f?.customer_phone_snapshot || o.customer_phone || '—',
-              fulfillment_type: o.fulfillment_type || 'PICKUP',
-              fulfillment_status: f?.fulfillment_status || 'WAITING_FOR_PICKUP',
-              order_status: o.status,
-              payment_status: o.payment_status,
-              payment_method: o.payment_method,
-              total: Number(o.total),
-              pickup_code: f?.pickup_code_display ?? null,
-              promised_ready_at: f?.promised_ready_at ?? null,
-              created_at: o.created_at,
-              items_count: 0,
-            };
-          });
-        } else if (ordersRes.error) {
-          throw ordersRes.error;
-        }
-      }
 
       // Fetch items for displayed orders
       if (fetchedOrders.length > 0) {
@@ -189,8 +147,7 @@ export default function PickupManagementPage() {
         !q ||
         o.order_number.toString().includes(q) ||
         o.customer_name.toLowerCase().includes(q) ||
-        o.customer_phone.includes(q) ||
-        (o.pickup_code && o.pickup_code.toLowerCase().includes(q));
+        o.customer_phone.includes(q);
 
       let matchesTab = true;
       if (activeTab === 'READY') {
@@ -227,26 +184,55 @@ export default function PickupManagementPage() {
   async function handleConfirmHandover(e: React.FormEvent) {
     e.preventDefault();
     if (!supabase || !handoverTarget) return;
+    const collectPayment = handoverTarget.payment_status !== 'PAID';
+    const paymentReference = handoverPaymentReference.trim();
+    if (collectPayment && handoverPaymentMethod === 'UPI' && !paymentReference) {
+      setHandoverError('Enter the UPI reference after confirming payment received.');
+      return;
+    }
     setSubmittingHandover(true);
     setHandoverError(null);
 
     try {
-      const { error: cErr } = await supabase.rpc('fulfillment_confirm_pickup', {
+      const { data: confirmed, error: cErr } = await supabase.rpc('fulfillment_confirm_pickup', {
         p_order_id: handoverTarget.order_id,
         p_pickup_code: managerOverride ? null : enteredCode.trim(),
         p_manager_override: managerOverride,
+        p_override_reason: managerOverride ? overrideReason.trim() : null,
+        p_payment_method: collectPayment ? handoverPaymentMethod : null,
+        p_payment_reference: collectPayment && handoverPaymentMethod === 'UPI' ? paymentReference : null,
       });
 
       if (cErr) throw cErr;
+      if (confirmed !== true) {
+        setHandoverError('Pickup code is invalid, expired, or has reached the verification attempt limit. Ask a manager to verify the customer.');
+        return;
+      }
 
       setHandoverTarget(null);
       setEnteredCode('');
       setManagerOverride(false);
+      setOverrideReason('Customer identity verified in person.');
+      setHandoverPaymentMethod('CASH');
+      setHandoverPaymentReference('');
       void loadData();
     } catch (err: unknown) {
-      const msg =
-        (err as { message?: string })?.message ??
-        (err instanceof Error ? err.message : 'Invalid pickup code. Please check and try again.');
+      const error = typeof err === 'object' && err !== null ? err as { code?: unknown; message?: unknown } : null;
+      const code = typeof error?.code === 'string' ? error.code : null;
+      const message = typeof error?.message === 'string' ? error.message : '';
+      const msg = code === '42501'
+        ? 'You do not have permission to verify pickup or record payment.'
+        : code === 'PGRST202'
+          ? 'Pickup handover payment is unavailable. Apply the latest database migration.'
+          : code === 'P0001' && [
+            'Choose Cash or UPI after receiving the payment',
+            'UPI handover requires a UTR or payment reference',
+            'Permission denied: PAYMENTS required to collect pickup payment',
+            'This pickup order is not eligible for manual payment collection',
+            'Pickup payment collection is already recorded; refresh the order',
+          ].includes(message)
+            ? message
+            : 'Could not complete pickup handover. Refresh the order and verify its status before retrying.';
       setHandoverError(msg);
     } finally {
       setSubmittingHandover(false);
@@ -429,25 +415,10 @@ export default function PickupManagementPage() {
                     </a>
                   </div>
 
-                  {/* Prominent Pickup Code Badge */}
-                  {o.pickup_code && (
-                    <div
-                      style={{
-                        background: '#ecfdf5',
-                        border: '1.5px solid #10b981',
-                        borderRadius: 6,
-                        padding: '4px 10px',
-                        textAlign: 'center',
-                      }}
-                    >
-                      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.05em', color: '#065f46', textTransform: 'uppercase' }}>
-                        Pickup Code
-                      </span>
-                      <strong style={{ display: 'block', fontSize: 18, color: '#047857', fontFamily: 'monospace', letterSpacing: '0.1em' }}>
-                        #{o.pickup_code}
-                      </strong>
-                    </div>
-                  )}
+                  <div style={{ border: '1px solid #cbd5e1', borderRadius: 8, padding: '8px 10px', maxWidth: 150 }}>
+                    <span style={{ display: 'block', fontSize: 9, fontWeight: 700, color: '#475569', textTransform: 'uppercase' }}>Handover verification</span>
+                    <strong style={{ fontSize: 12, color: '#0f172a' }}>Customer code required</strong>
+                  </div>
                 </div>
 
                 {/* Items Preview */}
@@ -545,6 +516,8 @@ export default function PickupManagementPage() {
                         setEnteredCode('');
                         setManagerOverride(false);
                         setHandoverError(null);
+                        setHandoverPaymentMethod(o.payment_method === 'PICKUP_UPI' ? 'UPI' : 'CASH');
+                        setHandoverPaymentReference('');
                       }}
                     >
                       <Check size={14} /> Verify Code & Hand Over
@@ -583,6 +556,24 @@ export default function PickupManagementPage() {
               </p>
 
               {handoverError && <div className="notice notice-error" style={{ marginBottom: 12 }}>{handoverError}</div>}
+              {handoverTarget.payment_status === 'PAID' ? (
+                <div className="notice notice-info" role="status">Payment already recorded. Handover will complete the order.</div>
+              ) : (
+                <div style={{ display: 'grid', gap: 10 }}>
+                  <p style={{ margin: 0 }}>Confirm the full payment was received before completing handover.</p>
+                  <strong>Amount due: {formatMoney(Number(handoverTarget.total))}</strong>
+                  <div className="button-row" role="group" aria-label="Pickup payment method">
+                    <button type="button" className={`button ${handoverPaymentMethod === 'CASH' ? 'button-primary' : 'button-light'}`} aria-pressed={handoverPaymentMethod === 'CASH'} onClick={() => setHandoverPaymentMethod('CASH')}>Cash</button>
+                    <button type="button" className={`button ${handoverPaymentMethod === 'UPI' ? 'button-primary' : 'button-light'}`} aria-pressed={handoverPaymentMethod === 'UPI'} onClick={() => setHandoverPaymentMethod('UPI')}>UPI</button>
+                  </div>
+                  {handoverPaymentMethod === 'UPI' ? (
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 600 }}>
+                      UPI reference / UTR
+                      <input type="text" value={handoverPaymentReference} onChange={(event) => setHandoverPaymentReference(event.target.value)} maxLength={128} required placeholder="Enter payment reference" />
+                    </label>
+                  ) : null}
+                </div>
+              )}
 
               {!managerOverride ? (
                 <label>
@@ -612,6 +603,12 @@ export default function PickupManagementPage() {
                 />
                 <span>Customer phone dead / Manager Override</span>
               </label>
+              {managerOverride ? (
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13 }}>
+                  Override reason (at least 8 characters)
+                  <input minLength={8} required value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} />
+                </label>
+              ) : null}
 
               <div className="modal-actions" style={{ marginTop: 16 }}>
                 <button type="button" className="button button-light" onClick={() => setHandoverTarget(null)}>
@@ -620,9 +617,9 @@ export default function PickupManagementPage() {
                 <button
                   type="submit"
                   className="button button-primary"
-                  disabled={submittingHandover || (!managerOverride && enteredCode.length !== 4)}
+                  disabled={submittingHandover || (!managerOverride && enteredCode.length !== 4) || (handoverTarget.payment_status !== 'PAID' && handoverPaymentMethod === 'UPI' && !handoverPaymentReference.trim())}
                 >
-                  {submittingHandover ? 'Verifying…' : 'Confirm Handover'}
+                  {submittingHandover ? 'Verifying…' : handoverTarget.payment_status === 'PAID' ? 'Confirm Handover & Complete' : `Confirm ${handoverPaymentMethod} & Complete`}
                 </button>
               </div>
             </form>

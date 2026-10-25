@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { CalendarDays, Clock3, RefreshCw, X, Banknote, ChevronDown, ChevronUp, RotateCcw, MessageCircle, MapPin, Bike, ShoppingBag, Check } from 'lucide-react';
+import { CalendarDays, Clock3, RefreshCw, X, Banknote, ChevronDown, ChevronUp, RotateCcw, MessageCircle, Bike, ShoppingBag, Check } from 'lucide-react';
 import { StudioShell } from '@/components/StudioShell';
 import { SectionHeader } from '@/components/SectionHeader';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -73,17 +73,29 @@ interface FulfillmentDetail {
   order_id: string;
   branch_id: string;
   fulfillment_type: 'PICKUP' | 'DELIVERY';
-  pickup_code: string | null;
-  pickup_verified_at: string | null;
-  pickup_window_start: string | null;
-  pickup_window_end: string | null;
-  delivery_address_line1: string | null;
-  delivery_address_line2: string | null;
-  delivery_landmark: string | null;
-  delivery_city: string | null;
-  delivery_pin_code: string | null;
-  delivery_status: string | null;
+  fulfillment_status: string;
+  scheduled_for: string | null;
+  promised_ready_at: string | null;
+  promised_delivery_at: string | null;
+  delivery_zone_id: string | null;
+  delivery_fee_snapshot: number;
+  packaging_fee_snapshot: number;
   assigned_staff_id: string | null;
+  accepted_at: string | null;
+  ready_at: string | null;
+  assigned_at: string | null;
+  dispatched_at: string | null;
+  picked_up_at: string | null;
+  pickup_verified_at?: string | null;
+  delivered_at: string | null;
+  failed_at: string | null;
+  failure_reason: string | null;
+  payment_collected_at: string | null;
+  payment_collected_by: string | null;
+  payment_collection_method: string | null;
+  payment_collected_amount: number | null;
+  created_at: string;
+  updated_at: string;
 }
 
 const rejectReasons = [
@@ -150,6 +162,7 @@ export default function OrdersPage() {
   const [rejectNote, setRejectNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [settleOrder, setSettleOrder] = useState<OrderRow | null>(null);
+  const [settleReference, setSettleReference] = useState('');
   const [counterPaymentOrder, setCounterPaymentOrder] = useState<OrderRow | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [reopenTarget, setReopenTarget] = useState<OrderRow | null>(null);
@@ -159,6 +172,8 @@ export default function OrdersPage() {
   const [verifyCode, setVerifyCode] = useState('');
   const [verifyOverride, setVerifyOverride] = useState(false);
   const [verifyOverrideReason, setVerifyOverrideReason] = useState('Customer ID / Phone verified');
+  const [verifyPaymentMethod, setVerifyPaymentMethod] = useState<'CASH' | 'UPI'>('CASH');
+  const [verifyPaymentReference, setVerifyPaymentReference] = useState('');
   const [verifyError, setVerifyError] = useState<string | null>(null);
 
   async function loadCustomerChats(branchId: string) {
@@ -197,7 +212,7 @@ export default function OrdersPage() {
       while (hasMoreOrders) {
         const { data, error: orderError } = await supabase
           .from('orders')
-          .select('id,order_number,table_id,table_session_id,branch_id,status,payment_status,payment_method,total,created_at,updated_at,customer_note,customer_name,customer_phone,cancellation_reason,cancelled_by,cancelled_at,payment_started_at,payment_expires_at,priority,fulfillment_type')
+          .select('id,order_number,table_id,table_session_id,branch_id,status,payment_status,payment_method,total,created_at,updated_at,cancellation_reason,cancelled_by,cancelled_at,payment_started_at,payment_expires_at,priority,fulfillment_type')
           .eq('branch_id', b)
           .gte('created_at',bounds.from).lt('created_at',bounds.toExclusive)
           .order('created_at', { ascending: false })
@@ -207,6 +222,19 @@ export default function OrdersPage() {
         orderRows.push(...(page as OrderRow[]));
         hasMoreOrders = page.length === 200;
         orderOffset += page.length;
+      }
+
+      // Customer identity and notes are intentionally not direct table columns
+      // for staff sessions. The branch-scoped RPC applies granular permissions.
+      const customerDetails: Record<string, { customer_name: string | null; customer_phone: string | null; customer_note: string | null }> = {};
+      const customerOrderIds = orderRows.map((row) => row.id);
+      for (let start = 0; start < customerOrderIds.length; start += 200) {
+        const { data: detailRows, error: detailError } = await supabase.rpc('get_branch_order_customer_details', {
+          p_branch_id: b,
+          p_order_ids: customerOrderIds.slice(start, start + 200),
+        });
+        if (detailError) throw detailError;
+        for (const detail of detailRows ?? []) customerDetails[detail.order_id] = detail;
       }
 
       const [{ data: t, error: te }, { data: st, error: se }] = await Promise.all([
@@ -239,10 +267,11 @@ export default function OrdersPage() {
           itemOffset += itemPage.length;
         }
 
-        const { data: fdData } = await supabase
+        const { data: fdData, error: fdError } = await supabase
           .from('order_fulfillment_details')
-          .select('*')
+          .select('id,order_id,branch_id,fulfillment_type,fulfillment_status,scheduled_for,promised_ready_at,promised_delivery_at,delivery_zone_id,delivery_fee_snapshot,packaging_fee_snapshot,assigned_staff_id,accepted_at,ready_at,assigned_at,dispatched_at,picked_up_at,delivered_at,failed_at,failure_reason,payment_collected_at,payment_collected_by,payment_collection_method,payment_collected_amount,created_at,updated_at')
           .in('order_id', batch);
+        if (fdError) throw fdError;
         if (fdData) {
           for (const item of fdData) {
             fMap[item.order_id] = item as FulfillmentDetail;
@@ -251,7 +280,15 @@ export default function OrdersPage() {
       }
 
       if (n !== seq.current) return;
-      setRows(orderRows.map((x) => ({ ...x, total: Number(x.total), priority: (x.priority ?? 'NORMAL') as Priority })));
+      setRows(orderRows.map((x) => ({
+        ...x,
+        ...customerDetails[x.id],
+        customer_name: customerDetails[x.id]?.customer_name ?? null,
+        customer_phone: customerDetails[x.id]?.customer_phone ?? null,
+        customer_note: customerDetails[x.id]?.customer_note ?? null,
+        total: Number(x.total),
+        priority: (x.priority ?? 'NORMAL') as Priority,
+      })));
       setItems(grouped);
       setFulfillmentMap(fMap);
       setTables(Object.fromEntries((t ?? []).map((x) => [x.id, x.table_number])));
@@ -260,7 +297,14 @@ export default function OrdersPage() {
       setLoading(false);
     } catch (e: unknown) {
       if (n === seq.current) {
-        setError(e instanceof Error ? e.message : 'Could not load orders.');
+        const code = typeof e === 'object' && e !== null && 'code' in e && typeof e.code === 'string'
+          ? e.code
+          : null;
+        setError(code === 'PGRST202'
+          ? 'Order data is unavailable because a required database function is missing. Apply the latest database migrations and retry.'
+          : code === '42501'
+            ? 'You do not have permission to view these orders.'
+            : 'Could not load orders. Refresh the page and try again.');
         setLoading(false);
       }
     } finally {
@@ -355,6 +399,7 @@ export default function OrdersPage() {
     if (!target) return;
     if (target === 'COMPLETED' && o.payment_status !== 'PAID') {
       setSettleOrder(o);
+      setSettleReference('');
       return;
     }
     setBusy(true);
@@ -372,21 +417,60 @@ export default function OrdersPage() {
 
   async function handleVerifyPickup() {
     if (!supabase || !verifyTarget || busy) return;
+    const collectPayment = verifyTarget.payment_status !== 'PAID';
+    const paymentReference = verifyPaymentReference.trim();
+    if (collectPayment && verifyPaymentMethod === 'UPI' && !paymentReference) {
+      setVerifyError('Enter the UPI reference after confirming payment received.');
+      return;
+    }
     setBusy(true);
     setVerifyError(null);
     try {
-      const { error: e } = await supabase.rpc('fulfillment_confirm_pickup', {
+      const { data: verified, error: e } = await supabase.rpc('fulfillment_confirm_pickup', {
         p_order_id: verifyTarget.id,
         p_pickup_code: verifyOverride ? null : verifyCode.trim(),
         p_manager_override: verifyOverride,
+        p_override_reason: verifyOverride ? verifyOverrideReason.trim() : null,
+        p_payment_method: collectPayment ? verifyPaymentMethod : null,
+        p_payment_reference: collectPayment && verifyPaymentMethod === 'UPI' ? paymentReference : null,
       });
       if (e) throw e;
+      if (verified !== true) {
+        setVerifyError('Pickup code is invalid, expired, or has reached the verification attempt limit.');
+        return;
+      }
       setVerifyTarget(null);
       setVerifyCode('');
       setVerifyOverride(false);
+      setVerifyOverrideReason('Customer ID / Phone verified');
+      setVerifyPaymentMethod('CASH');
+      setVerifyPaymentReference('');
       void load(true);
     } catch (e: unknown) {
-      setVerifyError(e instanceof Error ? e.message : 'Could not verify pickup.');
+      const error = typeof e === 'object' && e !== null ? e as { code?: unknown; message?: unknown } : null;
+      const code = typeof error?.code === 'string' ? error.code : null;
+      const message = typeof error?.message === 'string' ? error.message : '';
+      setVerifyError(code === '42703'
+        ? 'Pickup verification schema is incomplete. Apply the latest database migration, then retry.'
+        : code === 'PGRST202'
+          ? 'Pickup verification function is unavailable. Apply the latest database migration, then retry.'
+          : code === '42501'
+            ? 'You do not have permission to verify this pickup.'
+            : code === 'P0001' && [
+              'Pickup order not found',
+              'Pickup is not ready for handover',
+              'Order must be READY before pickup handover',
+              'Order cannot be picked up in its current state',
+              'Manager override requires an audit reason of at least 8 characters',
+              'Permission denied: MANAGE_PICKUP required',
+              'Choose Cash or UPI after receiving the payment',
+              'UPI handover requires a UTR or payment reference',
+              'Permission denied: PAYMENTS required to collect pickup payment',
+              'This pickup order is not eligible for manual payment collection',
+              'Pickup payment collection is already recorded; refresh the order',
+            ].includes(message)
+              ? message
+              : 'Could not verify pickup. Refresh the page and try again.');
     } finally {
       setBusy(false);
     }
@@ -394,17 +478,48 @@ export default function OrdersPage() {
 
   async function settle(method: 'CASH' | 'UPI') {
     if (!supabase || !settleOrder) return;
+    const isFulfillmentOrder = settleOrder.fulfillment_type === 'PICKUP' || settleOrder.fulfillment_type === 'DELIVERY';
+    const paymentReference = settleReference.trim();
+    if (isFulfillmentOrder && method === 'UPI' && !paymentReference) {
+      setError('Enter the UPI reference before recording this fulfillment payment.');
+      return;
+    }
     setBusy(true);
     setError(null);
+    let paymentRecorded = false;
     try {
-      const { error: paymentError } = await supabase.rpc('settle_counter_payment', { p_order_id: settleOrder.id, p_method: method });
+      const { error: paymentError } = isFulfillmentOrder
+        ? await supabase.rpc('fulfillment_collect_payment', {
+          p_order_id: settleOrder.id,
+          p_method: method,
+          p_amount: Number(settleOrder.total),
+          p_reference: paymentReference || null,
+          p_reference_source: paymentReference ? 'STAFF_CONFIRMED' : null,
+        })
+        : await supabase.rpc('settle_counter_payment', {
+          p_order_id: settleOrder.id,
+          p_method: method,
+          p_reference: paymentReference || null,
+        });
       if (paymentError) throw paymentError;
-      const { error: completionError } = await supabase.rpc('transition_order_status', { p_order_id: settleOrder.id, p_new_status: 'COMPLETED' });
-      if (completionError) throw completionError;
+      paymentRecorded = true;
+      if (!isFulfillmentOrder) {
+        const { error: completionError } = await supabase.rpc('transition_order_status', { p_order_id: settleOrder.id, p_new_status: 'COMPLETED' });
+        if (completionError) throw completionError;
+      }
       setSettleOrder(null);
+      setSettleReference('');
       void load(true);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Could not settle and complete order.');
+      const error = typeof e === 'object' && e !== null ? e as { code?: unknown } : null;
+      const code = typeof error?.code === 'string' ? error.code : null;
+      setError(paymentRecorded
+        ? 'Payment was recorded, but order completion failed. Refresh and review the order status before retrying.'
+        : code === 'PGRST202'
+          ? 'The payment function is unavailable. Apply the latest database migrations and retry.'
+          : code === '42501'
+            ? 'You do not have permission to record this payment.'
+            : 'Could not settle payment. Refresh the order and verify its payment status before retrying.');
     } finally {
       setBusy(false);
     }
@@ -669,11 +784,11 @@ export default function OrdersPage() {
                     <span style={{ fontSize: 13, fontWeight: 700, color: '#166534' }}>
                       Pickup Code:{' '}
                       <span style={{ fontFamily: 'monospace', letterSpacing: '0.08em', background: '#dcfce7', padding: '2px 6px', borderRadius: 4 }}>
-                        {fDetail?.pickup_code ? `#${fDetail.pickup_code}` : 'PENDING'}
+                        {fDetail?.fulfillment_status === 'PICKED_UP' ? 'HANDED OVER' : 'CUSTOMER CODE'}
                       </span>
                     </span>
                   </div>
-                  {fDetail?.pickup_verified_at ? (
+                  {fDetail?.fulfillment_status === 'PICKED_UP' ? (
                     <span style={{ fontSize: 11, fontWeight: 600, color: '#059669', display: 'flex', alignItems: 'center', gap: 3 }}>
                       <Check size={13} /> Handed Over
                     </span>
@@ -698,7 +813,7 @@ export default function OrdersPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <Bike size={14} color="#2563eb" />
                       <span style={{ fontSize: 12, fontWeight: 700, color: '#1e40af' }}>
-                        Delivery · {fDetail?.delivery_status ? fDetail.delivery_status.replaceAll('_', ' ') : 'AWAITING DISPATCH'}
+                        Delivery · {fDetail?.fulfillment_status ? fDetail.fulfillment_status.replaceAll('_', ' ') : 'WAITING FOR DISPATCH'}
                       </span>
                     </div>
                     <Link
@@ -708,12 +823,7 @@ export default function OrdersPage() {
                       Dispatch Board →
                     </Link>
                   </div>
-                  {fDetail?.delivery_address_line1 ? (
-                    <span style={{ fontSize: 11, color: '#1e3a8a', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <MapPin size={11} /> {fDetail.delivery_address_line1}
-                      {fDetail.delivery_pin_code ? ` (PIN ${fDetail.delivery_pin_code})` : ''}
-                    </span>
-                  ) : null}
+                  <span style={{ fontSize: 11, color: '#1e3a8a' }}>Customer address is available only in the authorized Delivery workspace.</span>
                 </div>
               ) : null}
 
@@ -821,7 +931,7 @@ export default function OrdersPage() {
                   <button className="button button-primary compact" onClick={() => void advance(o)} disabled={busy}>
                     Accept
                   </button>
-                ) : o.fulfillment_type === 'PICKUP' && o.status === 'READY' && !fDetail?.pickup_verified_at ? (
+                ) : o.fulfillment_type === 'PICKUP' && o.status === 'READY' && !fDetail?.picked_up_at ? (
                   <button
                     className="button button-primary compact"
                     style={{ background: '#059669', borderColor: '#059669' }}
@@ -830,6 +940,8 @@ export default function OrdersPage() {
                       setVerifyCode('');
                       setVerifyOverride(false);
                       setVerifyError(null);
+                      setVerifyPaymentMethod(o.payment_method === 'PICKUP_UPI' ? 'UPI' : 'CASH');
+                      setVerifyPaymentReference('');
                     }}
                     disabled={busy}
                   >
@@ -895,6 +1007,24 @@ export default function OrdersPage() {
             <div className="modal-form">
               <p>Ask customer for their 4-digit pickup code, or check Manager Override if verified via phone/receipt.</p>
               {verifyError ? <div className="notice notice-error" role="alert">{verifyError}</div> : null}
+              {verifyTarget.payment_status === 'PAID' ? (
+                <div className="notice notice-info" role="status">Payment already recorded. Handover will complete the order.</div>
+              ) : (
+                <div style={{ display: 'grid', gap: 10 }}>
+                  <p style={{ margin: 0 }}>Confirm the full payment was received before completing handover.</p>
+                  <strong>Amount due: ₹{Number(verifyTarget.total).toLocaleString('en-IN')}</strong>
+                  <div className="button-row" role="group" aria-label="Pickup payment method">
+                    <button type="button" className={`button ${verifyPaymentMethod === 'CASH' ? 'button-primary' : 'button-light'}`} aria-pressed={verifyPaymentMethod === 'CASH'} onClick={() => setVerifyPaymentMethod('CASH')}>Cash</button>
+                    <button type="button" className={`button ${verifyPaymentMethod === 'UPI' ? 'button-primary' : 'button-light'}`} aria-pressed={verifyPaymentMethod === 'UPI'} onClick={() => setVerifyPaymentMethod('UPI')}>UPI</button>
+                  </div>
+                  {verifyPaymentMethod === 'UPI' ? (
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 600 }}>
+                      UPI reference / UTR
+                      <input type="text" value={verifyPaymentReference} onChange={(event) => setVerifyPaymentReference(event.target.value)} maxLength={128} required placeholder="Enter payment reference" />
+                    </label>
+                  ) : null}
+                </div>
+              )}
               {!verifyOverride ? (
                 <label>
                   4-Digit Pickup Code
@@ -936,9 +1066,9 @@ export default function OrdersPage() {
                 <button
                   className="button button-primary"
                   onClick={() => void handleVerifyPickup()}
-                  disabled={busy || (!verifyOverride && verifyCode.trim().length < 4)}
+                  disabled={busy || (!verifyOverride && verifyCode.trim().length < 4) || (verifyTarget.payment_status !== 'PAID' && verifyPaymentMethod === 'UPI' && !verifyPaymentReference.trim())}
                 >
-                  {busy ? 'Verifying…' : 'Confirm Handover & Complete'}
+                  {busy ? 'Verifying…' : verifyTarget.payment_status === 'PAID' ? 'Confirm Handover & Complete' : `Confirm ${verifyPaymentMethod} & Complete`}
                 </button>
               </div>
             </div>
@@ -1058,6 +1188,19 @@ export default function OrdersPage() {
                 <span>Total due</span>
                 <strong>₹{Number(settleOrder.total).toLocaleString('en-IN')}</strong>
               </div>
+              {settleOrder.fulfillment_type === 'PICKUP' || settleOrder.fulfillment_type === 'DELIVERY' ? (
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 600 }}>
+                  UPI reference (required for UPI)
+                  <input
+                    type="text"
+                    value={settleReference}
+                    onChange={(event) => setSettleReference(event.target.value)}
+                    maxLength={128}
+                    placeholder="Enter UTR or payment reference"
+                    style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid #d8dce3', fontSize: 14 }}
+                  />
+                </label>
+              ) : null}
               <div className="button-row">
                 <button className="button button-primary" onClick={() => void settle('CASH')} disabled={busy}>
                   <Banknote size={14} /> Cash

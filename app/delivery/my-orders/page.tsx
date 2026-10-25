@@ -154,7 +154,7 @@ export default function RiderWorkspacePage() {
   }
 
   const activeDeliveries = deliveries.filter(
-    (d) => d.fulfillment_status === 'ASSIGNED' || d.fulfillment_status === 'OUT_FOR_DELIVERY',
+    (d) => d.fulfillment_status === 'ASSIGNED' || d.fulfillment_status === 'READY_FOR_DISPATCH' || d.fulfillment_status === 'OUT_FOR_DELIVERY',
   );
   const completedDeliveries = deliveries.filter((d) => d.fulfillment_status === 'DELIVERED');
 
@@ -273,14 +273,14 @@ export default function RiderWorkspacePage() {
                   <div>
                     <strong>Total Due: {formatMoney(Number(d.total))}</strong>
                     <div style={{ fontSize: 11, fontWeight: 700, color: d.payment_status === 'PAID' ? '#166534' : '#b45309', textAlign: 'right' }}>
-                      {d.payment_status === 'PAID' ? 'PAID ONLINE (No cash)' : 'COLLECT CASH / UPI'}
+                      {d.payment_status === 'PAID' ? 'PAID (No collection due)' : 'COLLECT CASH / UPI'}
                     </div>
                   </div>
                 </div>
 
                 {/* Operational Action Buttons */}
                 <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
-                  {d.fulfillment_status === 'ASSIGNED' && (
+                  {d.fulfillment_status === 'READY_FOR_DISPATCH' && (
                     <button
                       type="button"
                       className="button button-primary"

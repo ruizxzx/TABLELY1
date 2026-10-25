@@ -45,17 +45,17 @@ export default function OnlineOrderingSettingsPage() {
 
   // Settings state
   const [settings, setSettings] = useState({
-    online_ordering_enabled: true,
-    pickup_enabled: true,
-    delivery_enabled: true,
+    online_ordering_enabled: false,
+    pickup_enabled: false,
+    delivery_enabled: false,
     default_prep_minutes: 25,
     minimum_order_amount: 0,
     pickup_packaging_fee: 0,
     delivery_packaging_fee: 0,
     pickup_instructions: 'Please show your pickup code at the counter.',
     delivery_instructions: 'Contact-free delivery available on request.',
-    cod_enabled: true,
-    upi_on_delivery_enabled: true,
+    cod_enabled: false,
+    upi_on_delivery_enabled: false,
     free_delivery_threshold: null as number | null,
   });
 
@@ -76,28 +76,30 @@ export default function OnlineOrderingSettingsPage() {
       setBranchId(bId);
       setBranchName(context.data.branch.name);
 
-      // Fetch or ensure settings
-      const { data: sData, error: sErr } = await supabase.rpc('ensure_branch_ordering_settings', {
-        p_branch_id: bId,
-      });
+      // Read only. The settings initializer is intentionally internal to
+      // SECURITY DEFINER RPCs; a missing row must stay safely disabled.
+      const { data: s, error: sErr } = await supabase
+        .from('branch_ordering_settings')
+        .select('*')
+        .eq('branch_id', bId)
+        .maybeSingle();
       if (sErr) throw sErr;
-      if (sData) {
-        const s = Array.isArray(sData) ? sData[0] : sData;
+      if (s) {
         const pickupMeta = s.pickup_settings || {};
         const deliveryMeta = s.delivery_settings || {};
 
         setSettings({
-          online_ordering_enabled: s.online_ordering_enabled ?? true,
-          pickup_enabled: s.pickup_enabled ?? true,
-          delivery_enabled: s.delivery_enabled ?? true,
+          online_ordering_enabled: s.online_ordering_enabled ?? false,
+          pickup_enabled: s.pickup_enabled ?? false,
+          delivery_enabled: s.delivery_enabled ?? false,
           default_prep_minutes: Number(s.default_prep_minutes ?? 25),
           minimum_order_amount: Number(s.minimum_order_amount ?? 0),
           pickup_packaging_fee: Number(s.pickup_packaging_fee ?? 0),
           delivery_packaging_fee: Number(s.delivery_packaging_fee ?? 0),
           pickup_instructions: pickupMeta.instructions ?? 'Please show your pickup code at the counter.',
           delivery_instructions: deliveryMeta.instructions ?? 'Contact-free delivery available on request.',
-          cod_enabled: deliveryMeta.cod_enabled ?? true,
-          upi_on_delivery_enabled: deliveryMeta.upi_on_delivery_enabled ?? true,
+          cod_enabled: deliveryMeta.cod_enabled ?? false,
+          upi_on_delivery_enabled: deliveryMeta.upi_on_delivery_enabled ?? false,
           free_delivery_threshold: deliveryMeta.free_delivery_threshold ?? null,
         });
       }
@@ -143,28 +145,19 @@ export default function OnlineOrderingSettingsPage() {
     setSuccess(null);
 
     try {
-      const payload = {
-        branch_id: branchId,
-        online_ordering_enabled: settings.online_ordering_enabled,
-        pickup_enabled: settings.pickup_enabled,
-        delivery_enabled: settings.delivery_enabled,
-        default_prep_minutes: Number(settings.default_prep_minutes),
-        minimum_order_amount: Number(settings.minimum_order_amount),
-        pickup_packaging_fee: Number(settings.pickup_packaging_fee),
-        delivery_packaging_fee: Number(settings.delivery_packaging_fee),
-        pickup_settings: {
-          instructions: settings.pickup_instructions,
-        },
-        delivery_settings: {
-          instructions: settings.delivery_instructions,
-          cod_enabled: settings.cod_enabled,
-          upi_on_delivery_enabled: settings.upi_on_delivery_enabled,
-          free_delivery_threshold: settings.free_delivery_threshold ? Number(settings.free_delivery_threshold) : null,
-        },
-        updated_at: new Date().toISOString(),
-      };
+      const numericFields = [
+        Number(settings.default_prep_minutes),
+        Number(settings.minimum_order_amount),
+        Number(settings.pickup_packaging_fee),
+        Number(settings.delivery_packaging_fee),
+      ];
+      if (numericFields.some((value) => !Number.isFinite(value)) || numericFields[0] < 5 || numericFields[0] > 180 || numericFields.slice(1).some((value) => value < 0)) {
+        throw new Error('Enter valid preparation time and non-negative order/fee amounts.');
+      }
+      if (settings.pickup_instructions.length > 1000 || settings.delivery_instructions.length > 1000) {
+        throw new Error('Instructions must be 1000 characters or fewer.');
+      }
 
-      // Try RPC first for atomic validated persistence
       const { error: rpcErr } = await supabase.rpc('save_branch_ordering_settings', {
         p_branch_id: branchId,
         p_online_ordering_enabled: settings.online_ordering_enabled,
@@ -178,16 +171,11 @@ export default function OnlineOrderingSettingsPage() {
         p_delivery_instructions: settings.delivery_instructions,
         p_cod_enabled: settings.cod_enabled,
         p_upi_on_delivery_enabled: settings.upi_on_delivery_enabled,
-        p_free_delivery_threshold: settings.free_delivery_threshold ? Number(settings.free_delivery_threshold) : null,
+        p_free_delivery_threshold: settings.free_delivery_threshold,
+        p_clear_free_delivery_threshold: settings.free_delivery_threshold === null,
       });
+      if (rpcErr) throw rpcErr;
 
-      if (rpcErr) {
-        // Fallback to table upsert if RPC is pending migration
-        const { error: updateErr } = await supabase
-          .from('branch_ordering_settings')
-          .upsert(payload, { onConflict: 'branch_id' });
-        if (updateErr) throw updateErr;
-      }
 
       setSuccess('Online ordering settings successfully saved.');
     } catch (err: unknown) {
@@ -226,13 +214,19 @@ export default function OnlineOrderingSettingsPage() {
     e.preventDefault();
     if (!supabase || !editingZone || !branchId) return;
 
-    const pins = zoneFormPinString
-      .split(',')
-      .map((p) => p.trim())
-      .filter((p) => p.length === 6);
-
-    if (pins.length === 0) {
-      alert('Please enter at least one valid 6-digit PIN code.');
+    const rawPins = zoneFormPinString.split(',').map((p) => p.trim()).filter(Boolean);
+    if (rawPins.some((pin) => !/^\d{6}$/.test(pin))) {
+      alert('Every PIN code must contain exactly 6 digits.');
+      return;
+    }
+    const pins = Array.from(new Set(rawPins));
+    const feeValues = [editingZone.delivery_fee, editingZone.minimum_order_amount, editingZone.estimated_min_minutes, editingZone.estimated_max_minutes];
+    if (!editingZone.name.trim() || pins.length === 0 || feeValues.some((value) => !Number.isFinite(Number(value)) || Number(value) < 0) || editingZone.estimated_min_minutes < 1 || editingZone.estimated_max_minutes < editingZone.estimated_min_minutes) {
+      alert('Check the zone name, PIN codes, fees and delivery time range.');
+      return;
+    }
+    if (editingZone.free_delivery_threshold !== null && (!Number.isFinite(Number(editingZone.free_delivery_threshold)) || Number(editingZone.free_delivery_threshold) < 0)) {
+      alert('Free-delivery threshold must be a non-negative amount.');
       return;
     }
 
@@ -328,6 +322,9 @@ export default function OnlineOrderingSettingsPage() {
 
       {error && <div className="notice notice-error" role="alert">{error}</div>}
       {success && <div className="notice notice-info">{success}</div>}
+      <div className="notice notice-info" role="status">
+        Online ordering, pickup, delivery and payment-on-delivery options remain off until an authorized manager enables them and saves the settings. Automatic acceptance is disabled in this foundation build.
+      </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
         {/* General Ordering Controls */}
