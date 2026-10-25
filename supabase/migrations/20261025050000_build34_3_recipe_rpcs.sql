@@ -416,13 +416,14 @@ security definer
 stable
 set search_path = public
 as $$
+#variable_conflict use_column
 declare v_org uuid; v_can_view_cost boolean;
 begin
   if not public.current_user_has_permission_for_branch(p_branch_id, 'INVENTORY_VIEW') then
     raise exception 'INVENTORY_VIEW permission required' using errcode = '42501';
   end if;
 
-  select organization_id into v_org from public.branches where id = p_branch_id;
+  select b.organization_id into v_org from public.branches b where b.id = p_branch_id;
   if not public.organization_has_feature(v_org, 'INVENTORY') then
     raise exception 'Inventory is unavailable for this branch' using errcode = '42501';
   end if;
@@ -565,6 +566,7 @@ security definer
 stable
 set search_path = public
 as $$
+#variable_conflict use_column
 declare v_org uuid;
 begin
   if not public.current_user_has_permission_for_branch(p_branch_id, 'INVENTORY_COST_VIEW') then
@@ -578,7 +580,7 @@ begin
     raise exception 'Inventory is unavailable for this branch' using errcode = '42501';
   end if;
 
-  select organization_id into v_org from public.branches where id = p_branch_id;
+  select b.organization_id into v_org from public.branches b where b.id = p_branch_id;
 
   return query
   select

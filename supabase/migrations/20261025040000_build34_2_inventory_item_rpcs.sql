@@ -176,12 +176,12 @@ security definer
 stable
 set search_path = public
 as $$
+#variable_conflict use_column
+declare
+  v_org uuid;
 begin
-  if not exists (
-    select 1 from public.branches b
-    where b.id = p_branch_id
-      and public.organization_has_feature(b.organization_id, 'INVENTORY')
-  ) then
+  select b.organization_id into v_org from public.branches b where b.id = p_branch_id;
+  if v_org is null or not public.organization_has_feature(v_org, 'INVENTORY') then
     raise exception 'Inventory is unavailable for this branch' using errcode = '42501';
   end if;
   if not public.current_user_has_permission_for_branch(p_branch_id, 'INVENTORY_VIEW') then
@@ -228,7 +228,7 @@ begin
   from public.inventory_items ii
   left join public.inventory_categories ic on ic.id = ii.category_id
   left join public.inventory_balances ib on ib.item_id = ii.id and ib.branch_id = p_branch_id
-  where ii.organization_id = (select organization_id from public.branches where id = p_branch_id)
+  where ii.organization_id = v_org
     and ii.is_active = true
     and (p_search is null or ii.name ilike '%' || p_search || '%' or ii.sku ilike '%' || p_search || '%')
     and (p_category_id is null or ii.category_id = p_category_id)

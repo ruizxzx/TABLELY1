@@ -289,6 +289,187 @@ $$;
 grant execute on function public.inventory_get_overview(uuid) to authenticated;
 revoke execute on function public.inventory_get_overview(uuid) from anon, public;
 
+-- ---------------------------------------------------------------------------
+-- 7) Fix ambiguous column reference in inventory_list_items
+-- ---------------------------------------------------------------------------
+create or replace function public.inventory_list_items(
+  p_branch_id uuid,
+  p_search text default null,
+  p_category_id uuid default null,
+  p_status text default null, -- 'LOW','OUT','HEALTHY','ALL'
+  p_limit integer default 50,
+  p_offset integer default 0
+)
+returns table(
+  id uuid,
+  name text,
+  sku text,
+  category_id uuid,
+  category_name text,
+  base_unit text,
+  purchase_unit text,
+  purchase_unit_conversion numeric,
+  reorder_level numeric,
+  target_stock_level numeric,
+  track_expiry boolean,
+  track_batches boolean,
+  is_active boolean,
+  -- Balance data
+  on_hand_qty numeric,
+  reserved_qty numeric,
+  available_qty numeric,
+  avg_unit_cost_paise bigint,
+  stock_value_paise bigint,
+  last_movement_at timestamptz,
+  -- Stock status
+  stock_status text,
+  -- Upcoming expiry count
+  expiring_batch_count bigint
+)
+language plpgsql
+security definer
+stable
+set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_org uuid;
+begin
+  select b.organization_id into v_org from public.branches b where b.id = p_branch_id;
+  if v_org is null or not public.organization_has_feature(v_org, 'INVENTORY') then
+    raise exception 'Inventory is unavailable for this branch' using errcode = '42501';
+  end if;
+  if not public.current_user_has_permission_for_branch(p_branch_id, 'INVENTORY_VIEW') then
+    raise exception 'INVENTORY_VIEW permission required' using errcode = '42501';
+  end if;
+
+  return query
+  select
+    ii.id,
+    ii.name,
+    ii.sku,
+    ii.category_id,
+    ic.name as category_name,
+    ii.base_unit,
+    ii.purchase_unit,
+    ii.purchase_unit_conversion,
+    ii.reorder_level,
+    ii.target_stock_level,
+    ii.track_expiry,
+    ii.track_batches,
+    ii.is_active,
+    coalesce(ib.on_hand_qty, 0) as on_hand_qty,
+    coalesce(ib.reserved_qty, 0) as reserved_qty,
+    coalesce(ib.available_qty, 0) as available_qty,
+    case when public.current_user_has_permission_for_branch(p_branch_id, 'INVENTORY_COST_VIEW')
+      then coalesce(ib.avg_unit_cost_paise, 0) else null end as avg_unit_cost_paise,
+    case when public.current_user_has_permission_for_branch(p_branch_id, 'INVENTORY_COST_VIEW')
+      then coalesce(ib.stock_value_paise, 0) else null end as stock_value_paise,
+    ib.last_movement_at,
+    case
+      when coalesce(ib.available_qty, 0) <= 0 then 'OUT'
+      when ii.reorder_level is not null and coalesce(ib.available_qty, 0) <= ii.reorder_level then 'LOW'
+      else 'HEALTHY'
+    end as stock_status,
+    (
+      select count(*) from public.inventory_batches bat
+      where bat.item_id = ii.id
+        and bat.branch_id = p_branch_id
+        and bat.is_active = true
+        and bat.current_qty > 0
+        and bat.expires_at is not null
+        and bat.expires_at <= current_date + 7
+    ) as expiring_batch_count
+  from public.inventory_items ii
+  left join public.inventory_categories ic on ic.id = ii.category_id
+  left join public.inventory_balances ib on ib.item_id = ii.id and ib.branch_id = p_branch_id
+  where ii.organization_id = v_org
+    and ii.is_active = true
+    and (p_search is null or ii.name ilike '%' || p_search || '%' or ii.sku ilike '%' || p_search || '%')
+    and (p_category_id is null or ii.category_id = p_category_id)
+    and (
+      p_status is null or p_status = 'ALL'
+      or (p_status = 'OUT' and coalesce(ib.available_qty, 0) <= 0)
+      or (p_status = 'LOW' and ii.reorder_level is not null and coalesce(ib.available_qty, 0) > 0 and coalesce(ib.available_qty, 0) <= ii.reorder_level)
+      or (p_status = 'HEALTHY' and coalesce(ib.available_qty, 0) > 0 and (ii.reorder_level is null or coalesce(ib.available_qty, 0) > ii.reorder_level))
+    )
+  order by ii.name
+  limit p_limit offset p_offset;
+end;
+$$;
+grant execute on function public.inventory_list_items(uuid, text, uuid, text, integer, integer) to authenticated;
+revoke execute on function public.inventory_list_items(uuid, text, uuid, text, integer, integer) from anon, public;
+
+-- ---------------------------------------------------------------------------
+-- 8) Fix ambiguous column reference in inventory_list_recipes
+-- ---------------------------------------------------------------------------
+create or replace function public.inventory_list_recipes(
+  p_branch_id uuid,
+  p_search text default null,
+  p_is_sub_recipe boolean default null
+)
+returns table(
+  id uuid,
+  name text,
+  description text,
+  menu_item_id uuid,
+  menu_item_name text,
+  output_servings numeric,
+  output_unit text,
+  is_sub_recipe boolean,
+  is_active boolean,
+  current_version_id uuid,
+  version_number integer,
+  cost_per_serving_paise bigint,
+  updated_at timestamptz
+)
+language plpgsql
+security definer
+stable
+set search_path = public
+as $$
+#variable_conflict use_column
+declare v_org uuid; v_can_view_cost boolean;
+begin
+  if not public.current_user_has_permission_for_branch(p_branch_id, 'INVENTORY_VIEW') then
+    raise exception 'INVENTORY_VIEW permission required' using errcode = '42501';
+  end if;
+
+  select b.organization_id into v_org from public.branches b where b.id = p_branch_id;
+  if not public.organization_has_feature(v_org, 'INVENTORY') then
+    raise exception 'Inventory is unavailable for this branch' using errcode = '42501';
+  end if;
+  v_can_view_cost := public.current_user_has_permission_for_branch(p_branch_id, 'INVENTORY_COST_VIEW');
+
+  return query
+  select
+    r.id,
+    r.name,
+    r.description,
+    r.menu_item_id,
+    mi.name as menu_item_name,
+    r.output_servings,
+    r.output_unit,
+    r.is_sub_recipe,
+    r.is_active,
+    r.current_version_id,
+    rv.version_number,
+    case when v_can_view_cost then rv.cost_per_serving_paise else null end,
+    r.updated_at
+  from public.inventory_recipes r
+  left join public.menu_items mi on mi.id = r.menu_item_id
+  left join public.inventory_recipe_versions rv on rv.id = r.current_version_id
+  where r.organization_id = v_org
+    and (r.branch_id is null or r.branch_id = p_branch_id)
+    and r.is_active = true
+    and (p_search is null or r.name ilike '%' || p_search || '%')
+    and (p_is_sub_recipe is null or r.is_sub_recipe = p_is_sub_recipe)
+  order by r.name;
+end;
+$$;
+grant execute on function public.inventory_list_recipes(uuid, text, boolean) to authenticated;
+revoke execute on function public.inventory_list_recipes(uuid, text, boolean) from anon, public;
+
 select pg_notify('pgrst', 'reload schema');
 
 commit;
