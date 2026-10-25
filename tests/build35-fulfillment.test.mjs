@@ -130,6 +130,7 @@ test('all required storefront, checkout, tracking, dispatch, rider, and settings
     'components/customer/StorefrontCheckoutClient.tsx',
     'components/customer/StorefrontTrackClient.tsx',
     'app/settings/online-ordering/page.tsx',
+    'app/pickup/page.tsx',
     'app/delivery/page.tsx',
     'app/delivery/my-orders/page.tsx',
   ];
@@ -147,3 +148,24 @@ test('orders and kitchen screens display pickup and delivery channels without re
   assert.match(kitchen, /o\.fulfillment_type==='PICKUP'\?'Pickup':o\.fulfillment_type==='DELIVERY'\?'Delivery'/);
   assert.match(kitchen, /table_id:string\|null/);
 });
+
+test('build 35.2 hardening migration provides save_branch_ordering_settings and fixed fulfillment_list_branch_orders', async () => {
+  const sql = await read('supabase/migrations/20261026020000_build35_2_fulfillment_hardening_and_pickup.sql');
+  assert.match(sql, /create or replace function public\.save_branch_ordering_settings/i);
+  assert.match(sql, /grant execute on function public\.save_branch_ordering_settings/i);
+  assert.match(sql, /create or replace function public\.fulfillment_list_branch_orders/i);
+  assert.match(sql, /select count\(\*\)::bigint from public\.order_items oi where oi\.order_id = o\.id/i);
+});
+
+test('dedicated self pickup screen and StudioShell navigation exist', async () => {
+  const pickup = await read('app/pickup/page.tsx');
+  assert.match(pickup, /Self Pickup System/);
+  assert.match(pickup, /fulfillment_confirm_pickup/);
+  assert.match(pickup, /setSearch/);
+  assert.match(pickup, /pickup_code/);
+
+  const shell = await read('components/StudioShell.tsx');
+  assert.match(shell, /href: '\/pickup'/);
+  assert.match(shell, /'\/pickup': 'MANAGE_PICKUP'/);
+});
+

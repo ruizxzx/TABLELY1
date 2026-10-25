@@ -112,13 +112,68 @@ export default function DeliveryDispatchPage() {
         supabase.from('staff').select('id,full_name,role').eq('branch_id', bId).eq('active', true),
       ]);
 
-      if (ordersRes.error) throw ordersRes.error;
-      if (staffRes.error) throw staffRes.error;
+      let fetchedOrders: DeliveryOrder[] = [];
+      if (!ordersRes.error && ordersRes.data) {
+        fetchedOrders = ordersRes.data as DeliveryOrder[];
+      } else {
+        // Resilient fallback to direct orders query if RPC is pending migration
+        const { data: directOrders, error: dErr } = await supabase
+          .from('orders')
+          .select('id,order_number,customer_name,customer_phone,fulfillment_type,status,payment_status,payment_method,total,created_at')
+          .eq('branch_id', bId)
+          .eq('fulfillment_type', 'DELIVERY')
+          .order('created_at', { ascending: false })
+          .limit(100);
 
-      setOrders((ordersRes.data ?? []) as DeliveryOrder[]);
-      setStaffList((staffRes.data ?? []) as BranchStaff[]);
+        if (!dErr && directOrders) {
+          const orderIds = directOrders.map((o) => o.id);
+          const { data: ofdList } = await supabase
+            .from('order_fulfillment_details')
+            .select('*')
+            .in('order_id', orderIds);
+
+          const ofdMap = new Map((ofdList ?? []).map((f) => [f.order_id, f]));
+
+          fetchedOrders = directOrders.map((o) => {
+            const f = ofdMap.get(o.id);
+            return {
+              order_id: o.id,
+              order_number: o.order_number,
+              customer_name: f?.customer_name_snapshot || o.customer_name || 'Customer',
+              customer_phone: f?.customer_phone_snapshot || o.customer_phone || '—',
+              fulfillment_type: o.fulfillment_type || 'DELIVERY',
+              fulfillment_status: f?.fulfillment_status || 'WAITING_FOR_DRIVER',
+              order_status: o.status,
+              payment_status: o.payment_status,
+              payment_method: o.payment_method,
+              total: Number(o.total),
+              delivery_fee: Number(f?.delivery_fee_snapshot ?? 0),
+              address_snapshot: f?.address_snapshot ?? null,
+              delivery_instructions: f?.delivery_instructions ?? null,
+              pickup_code: f?.pickup_code_display ?? null,
+              delivery_otp: f?.delivery_otp_display ?? null,
+              assigned_staff_id: f?.assigned_staff_id ?? null,
+              assigned_staff_name: null,
+              promised_ready_at: f?.promised_ready_at ?? null,
+              promised_delivery_at: f?.promised_delivery_at ?? null,
+              created_at: o.created_at,
+              items_count: 0,
+            };
+          });
+        } else if (ordersRes.error) {
+          throw ordersRes.error;
+        }
+      }
+
+      setOrders(fetchedOrders);
+      if (staffRes.data) {
+        setStaffList(staffRes.data as BranchStaff[]);
+      }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Could not load delivery orders.');
+      const msg =
+        (err as { message?: string })?.message ??
+        (err instanceof Error ? err.message : 'Could not load delivery orders.');
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -296,6 +351,31 @@ export default function DeliveryDispatchPage() {
       />
 
       {error && <div className="notice notice-error" role="alert">{error}</div>}
+
+      {/* Fulfillment Mode Switcher */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <Link
+          href="/delivery"
+          className="button button-primary compact"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700 }}
+        >
+          <Bike size={14} /> Home Delivery ({orders.length})
+        </Link>
+        <Link
+          href="/pickup"
+          className="button button-light compact"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+        >
+          🥡 Self Pickup System
+        </Link>
+        <Link
+          href="/orders"
+          className="button button-light compact"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+        >
+          📋 Live Orders Board
+        </Link>
+      </div>
 
       {/* Status Filter Tabs & Search */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', marginBottom: 20 }}>

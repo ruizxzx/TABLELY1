@@ -27,6 +27,7 @@ import {
   MessageCircle,
   MoreHorizontal,
   Bike,
+  ShoppingBag,
 } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
@@ -44,6 +45,7 @@ const items = [
   { href: '/inventory', label: 'Inventory', Icon: Package, roles: ['OWNER', 'MANAGER'] },
   { href: '/kitchen', label: 'Kitchen', Icon: ChefHat, roles: ['OWNER', 'MANAGER', 'KITCHEN'] },
   { href: '/delivery', label: 'Delivery', Icon: Bike, roles: ['OWNER', 'MANAGER', 'WAITER', 'KITCHEN'] },
+  { href: '/pickup', label: 'Self Pickup', Icon: ShoppingBag, roles: ['OWNER', 'MANAGER', 'WAITER', 'KITCHEN'] },
   { href: '/service-requests', label: 'Service', Icon: BellRing, roles: ['OWNER', 'MANAGER', 'WAITER'] },
   { href: '/customer-messages', label: 'Customer messages', Icon: MessageCircle, roles: ['OWNER', 'MANAGER', 'WAITER'] },
   { href: '/payments', label: 'Payments', Icon: CreditCard, roles: ['OWNER', 'MANAGER'] },
@@ -75,6 +77,7 @@ const PERMISSION_FOR_HREF: Record<string, string> = {
   '/bills': 'BILLING',
   '/kitchen': 'KITCHEN_ACCESS',
   '/delivery': 'VIEW_DELIVERY',
+  '/pickup': 'MANAGE_PICKUP',
   '/dashboard/subscription': 'SUBSCRIPTION_MANAGEMENT',
   '/settings': 'SETTINGS',
 };

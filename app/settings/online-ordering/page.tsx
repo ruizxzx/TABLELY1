@@ -144,13 +144,14 @@ export default function OnlineOrderingSettingsPage() {
 
     try {
       const payload = {
+        branch_id: branchId,
         online_ordering_enabled: settings.online_ordering_enabled,
         pickup_enabled: settings.pickup_enabled,
         delivery_enabled: settings.delivery_enabled,
-        default_prep_minutes: settings.default_prep_minutes,
-        minimum_order_amount: settings.minimum_order_amount,
-        pickup_packaging_fee: settings.pickup_packaging_fee,
-        delivery_packaging_fee: settings.delivery_packaging_fee,
+        default_prep_minutes: Number(settings.default_prep_minutes),
+        minimum_order_amount: Number(settings.minimum_order_amount),
+        pickup_packaging_fee: Number(settings.pickup_packaging_fee),
+        delivery_packaging_fee: Number(settings.delivery_packaging_fee),
         pickup_settings: {
           instructions: settings.pickup_instructions,
         },
@@ -158,20 +159,42 @@ export default function OnlineOrderingSettingsPage() {
           instructions: settings.delivery_instructions,
           cod_enabled: settings.cod_enabled,
           upi_on_delivery_enabled: settings.upi_on_delivery_enabled,
-          free_delivery_threshold: settings.free_delivery_threshold,
+          free_delivery_threshold: settings.free_delivery_threshold ? Number(settings.free_delivery_threshold) : null,
         },
         updated_at: new Date().toISOString(),
       };
 
-      const { error: updateErr } = await supabase
-        .from('branch_ordering_settings')
-        .update(payload)
-        .eq('branch_id', branchId);
+      // Try RPC first for atomic validated persistence
+      const { error: rpcErr } = await supabase.rpc('save_branch_ordering_settings', {
+        p_branch_id: branchId,
+        p_online_ordering_enabled: settings.online_ordering_enabled,
+        p_pickup_enabled: settings.pickup_enabled,
+        p_delivery_enabled: settings.delivery_enabled,
+        p_default_prep_minutes: Number(settings.default_prep_minutes),
+        p_minimum_order_amount: Number(settings.minimum_order_amount),
+        p_pickup_packaging_fee: Number(settings.pickup_packaging_fee),
+        p_delivery_packaging_fee: Number(settings.delivery_packaging_fee),
+        p_pickup_instructions: settings.pickup_instructions,
+        p_delivery_instructions: settings.delivery_instructions,
+        p_cod_enabled: settings.cod_enabled,
+        p_upi_on_delivery_enabled: settings.upi_on_delivery_enabled,
+        p_free_delivery_threshold: settings.free_delivery_threshold ? Number(settings.free_delivery_threshold) : null,
+      });
 
-      if (updateErr) throw updateErr;
+      if (rpcErr) {
+        // Fallback to table upsert if RPC is pending migration
+        const { error: updateErr } = await supabase
+          .from('branch_ordering_settings')
+          .upsert(payload, { onConflict: 'branch_id' });
+        if (updateErr) throw updateErr;
+      }
+
       setSuccess('Online ordering settings successfully saved.');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Could not save settings.');
+      const msg =
+        (err as { message?: string })?.message ??
+        (err instanceof Error ? err.message : 'Could not save settings.');
+      setError(msg);
     } finally {
       setSaving(false);
     }
