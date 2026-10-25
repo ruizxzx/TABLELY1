@@ -7,6 +7,7 @@ import { SectionHeader } from '@/components/SectionHeader';
 import { StudioShell } from '@/components/StudioShell';
 import { getCurrentRestaurantContext } from '@/lib/restaurant-context';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { extractErrorMessage } from '@/lib/inventory-errors';
 import '../inventory.css';
 
 type Branch = { id: string; name: string };
@@ -124,7 +125,7 @@ export default function InventoryTransfersPage() {
         setDetails(null);
       }
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Could not load branch transfers.');
+      setError(extractErrorMessage(loadError, 'Could not load branch transfers.'));
     } finally {
       setLoading(false);
     }
@@ -145,7 +146,7 @@ export default function InventoryTransfersPage() {
       setSourceLocations((sourceLocationResult.data ?? []) as Location[]);
       setDestinationLocations((destinationLocationResult.data ?? []) as Location[]);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Could not load transfer stock and locations.');
+      setError(extractErrorMessage(loadError, 'Could not load transfer stock and locations.'));
     }
   }, [supabase, sourceBranchId, destinationBranchId]);
 
@@ -176,7 +177,7 @@ export default function InventoryTransfersPage() {
         locationId: line.to_location_id ?? '',
       }])));
     } catch (detailError) {
-      setError(detailError instanceof Error ? detailError.message : 'Could not load transfer details.');
+      setError(extractErrorMessage(detailError, 'Could not load transfer details.'));
       setDetails(null);
     }
   }, [supabase]);
@@ -251,7 +252,7 @@ export default function InventoryTransfersPage() {
       setSelectedId(String(result.data.id));
       await load();
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : 'Could not request the transfer.');
+      setError(extractErrorMessage(createError, 'Could not request the transfer.'));
     } finally {
       setBusy(false);
     }
@@ -293,7 +294,7 @@ export default function InventoryTransfersPage() {
       await load();
       await loadDetails(details.id);
     } catch (transitionError) {
-      setError(transitionError instanceof Error ? transitionError.message : 'Could not update the transfer.');
+      setError(extractErrorMessage(transitionError, 'Could not update the transfer.'));
     } finally {
       setBusy(false);
     }

@@ -10,6 +10,7 @@ export const TABLELY_FEATURES = [
   'ADVANCED_PERMISSIONS',
   'CUSTOM_DOMAIN',
   'PAYMENT_TRACKING',
+  'INVENTORY',
 ] as const;
 
 export type TablelyFeature = (typeof TABLELY_FEATURES)[number];

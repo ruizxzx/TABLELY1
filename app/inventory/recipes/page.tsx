@@ -7,6 +7,7 @@ import { SectionHeader } from '@/components/SectionHeader';
 import { StudioShell } from '@/components/StudioShell';
 import { getCurrentRestaurantContext } from '@/lib/restaurant-context';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { extractErrorMessage } from '@/lib/inventory-errors';
 import '../inventory.css';
 
 type Recipe = {
@@ -164,7 +165,7 @@ export default function InventoryRecipesPage() {
       })));
       setMenuItems((menuResult.data ?? []) as MenuItem[]);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Could not load recipes.');
+      setError(extractErrorMessage(loadError, 'Could not load recipes.'));
     } finally {
       setLoading(false);
     }
@@ -227,7 +228,7 @@ export default function InventoryRecipesPage() {
       setShowCreate(false);
       await load();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Could not save recipe.');
+      setError(extractErrorMessage(saveError, 'Could not save recipe.'));
     } finally {
       setSaving(false);
     }
@@ -267,7 +268,7 @@ export default function InventoryRecipesPage() {
       setShowCreate(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (editError) {
-      setError(editError instanceof Error ? editError.message : 'Could not load recipe for editing.');
+      setError(extractErrorMessage(editError, 'Could not load recipe for editing.'));
     }
   }
 
@@ -299,7 +300,7 @@ export default function InventoryRecipesPage() {
       if (versionResult.error) throw versionResult.error;
       setHistoryLines((versionResult.data as { lines?: VersionLine[] }).lines ?? []);
     } catch (historyError) {
-      setError(historyError instanceof Error ? historyError.message : 'Could not load recipe history.');
+      setError(extractErrorMessage(historyError, 'Could not load recipe history.'));
       setHistoryRecipe(null);
     } finally {
       setHistoryLoading(false);
@@ -320,7 +321,7 @@ export default function InventoryRecipesPage() {
       if (result.error) throw result.error;
       setHistoryLines((result.data as { lines?: VersionLine[] }).lines ?? []);
     } catch (versionError) {
-      setError(versionError instanceof Error ? versionError.message : 'Could not load this recipe version.');
+      setError(extractErrorMessage(versionError, 'Could not load this recipe version.'));
       setHistoryLines([]);
     } finally {
       setHistoryLoading(false);
@@ -342,7 +343,7 @@ export default function InventoryRecipesPage() {
       if (breakdown.error) throw new Error(breakdown.error);
       setCosts((current) => ({ ...current, [recipeId]: breakdown }));
     } catch (costError) {
-      setError(costError instanceof Error ? costError.message : 'Could not calculate recipe cost.');
+      setError(extractErrorMessage(costError, 'Could not calculate recipe cost.'));
     } finally {
       setCostLoading(null);
     }

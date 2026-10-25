@@ -7,6 +7,7 @@ import { SectionHeader } from '@/components/SectionHeader';
 import { StudioShell } from '@/components/StudioShell';
 import { getCurrentRestaurantContext } from '@/lib/restaurant-context';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { extractErrorMessage } from '@/lib/inventory-errors';
 import '../inventory.css';
 
 type WastageItem = {
@@ -101,7 +102,7 @@ export default function InventoryWastagePage() {
       setRecords((wastageRows.data ?? []) as WastageRecord[]);
       setItemId((current) => nextItems.some((item) => item.id === current) ? current : nextItems[0]?.id ?? '');
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Could not load wastage records.');
+      setError(extractErrorMessage(loadError, 'Could not load wastage records.'));
     } finally {
       setLoading(false);
     }
@@ -160,7 +161,7 @@ export default function InventoryWastagePage() {
       setNotice('Wastage recorded and stock adjusted.');
       await load();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Could not record wastage.');
+      setError(extractErrorMessage(saveError, 'Could not record wastage.'));
     } finally {
       setBusy(false);
     }

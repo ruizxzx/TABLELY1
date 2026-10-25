@@ -7,6 +7,7 @@ import { SectionHeader } from '@/components/SectionHeader';
 import { StudioShell } from '@/components/StudioShell';
 import { getCurrentRestaurantContext } from '@/lib/restaurant-context';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { extractErrorMessage } from '@/lib/inventory-errors';
 import '../inventory.css';
 
 type StockCount = {
@@ -96,7 +97,7 @@ export default function InventoryCountsPage() {
         setDetails(null);
       }
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Could not load stock counts.');
+      setError(extractErrorMessage(loadError, 'Could not load stock counts.'));
     } finally {
       setLoading(false);
     }
@@ -115,7 +116,7 @@ export default function InventoryCountsPage() {
         line.counted_qty == null ? '' : String(line.counted_qty),
       ])));
     } catch (detailError) {
-      setError(detailError instanceof Error ? detailError.message : 'Could not load count details.');
+      setError(extractErrorMessage(detailError, 'Could not load count details.'));
       setDetails(null);
     }
   }, [supabase]);
@@ -144,7 +145,7 @@ export default function InventoryCountsPage() {
       setNotice('Stock count created. Enter the physical quantities and submit when complete.');
       await load();
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : 'Could not create stock count.');
+      setError(extractErrorMessage(createError, 'Could not create stock count.'));
     } finally {
       setBusy(false);
     }
@@ -175,7 +176,7 @@ export default function InventoryCountsPage() {
       await load();
       await loadDetails(details.count.id);
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Could not submit count.');
+      setError(extractErrorMessage(submitError, 'Could not submit count.'));
     } finally {
       setBusy(false);
     }
@@ -194,7 +195,7 @@ export default function InventoryCountsPage() {
       await load();
       await loadDetails(details.count.id);
     } catch (approveError) {
-      setError(approveError instanceof Error ? approveError.message : 'Could not approve stock count.');
+      setError(extractErrorMessage(approveError, 'Could not approve stock count.'));
     } finally {
       setBusy(false);
     }

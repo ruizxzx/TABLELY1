@@ -7,6 +7,7 @@ import { SectionHeader } from '@/components/SectionHeader';
 import { StudioShell } from '@/components/StudioShell';
 import { getCurrentRestaurantContext } from '@/lib/restaurant-context';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { extractErrorMessage } from '@/lib/inventory-errors';
 import '../inventory.css';
 
 type Supplier = {
@@ -113,7 +114,7 @@ export default function InventoryPurchasesPage() {
       setOrders((ordersResult.data ?? []) as PurchaseOrder[]);
       setItems(((itemsResult.data ?? []) as Item[]).filter((item) => item.purchase_unit));
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Could not load purchasing.');
+      setError(extractErrorMessage(loadError, 'Could not load purchasing.'));
     } finally {
       setLoading(false);
     }
@@ -148,7 +149,7 @@ export default function InventoryPurchasesPage() {
       setShowSupplierForm(false);
       await load();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Could not save supplier.');
+      setError(extractErrorMessage(saveError, 'Could not save supplier.'));
     } finally {
       setSaving(false);
     }
@@ -188,7 +189,7 @@ export default function InventoryPurchasesPage() {
       setLines([{ itemId: '', quantity: '', price: '' }]);
       await load();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Could not create purchase order.');
+      setError(extractErrorMessage(saveError, 'Could not create purchase order.'));
     } finally {
       setSaving(false);
     }

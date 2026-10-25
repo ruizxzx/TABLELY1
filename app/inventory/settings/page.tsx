@@ -7,6 +7,7 @@ import { SectionHeader } from '@/components/SectionHeader';
 import { StudioShell } from '@/components/StudioShell';
 import { getCurrentRestaurantContext } from '@/lib/restaurant-context';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { extractErrorMessage } from '@/lib/inventory-errors';
 import '../inventory.css';
 
 type Location = { id: string; name: string; description: string | null; is_active: boolean };
@@ -72,7 +73,7 @@ export default function InventorySettingsPage() {
       setLocations((locationsResult.data ?? []) as Location[]);
       setCategories((categoriesResult.data ?? []) as Category[]);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Could not load inventory settings.');
+      setError(extractErrorMessage(loadError, 'Could not load inventory settings.'));
     } finally {
       setLoading(false);
     }
@@ -103,7 +104,7 @@ export default function InventorySettingsPage() {
       setNotice('Branch inventory settings saved.');
       await load();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Could not save inventory settings.');
+      setError(extractErrorMessage(saveError, 'Could not save inventory settings.'));
     } finally {
       setSaving(false);
     }
@@ -127,7 +128,7 @@ export default function InventorySettingsPage() {
       setNotice('Storage location added.');
       await load();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Could not add the storage location.');
+      setError(extractErrorMessage(saveError, 'Could not add the storage location.'));
     } finally {
       setSaving(false);
     }
@@ -152,7 +153,7 @@ export default function InventorySettingsPage() {
       setNotice('Ingredient category added.');
       await load();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Could not add the category.');
+      setError(extractErrorMessage(saveError, 'Could not add the category.'));
     } finally {
       setSaving(false);
     }

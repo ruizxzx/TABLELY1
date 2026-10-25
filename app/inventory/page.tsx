@@ -8,6 +8,7 @@ import { StudioShell } from '@/components/StudioShell';
 import { getCurrentRestaurantContext } from '@/lib/restaurant-context';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
 import './inventory.css';
+import { extractErrorMessage } from '@/lib/inventory-errors';
 
 type InventoryItem = {
   id: string;
@@ -145,6 +146,12 @@ export default function InventoryPage() {
       setCanViewCost(Boolean(costPermission.data));
       setCanTransfer(Boolean(transferPermission.data));
 
+      void Promise.allSettled([
+        supabase.rpc('inventory_ensure_default_categories', { p_organization_id: context.data.organization.id }),
+        supabase.rpc('inventory_ensure_default_locations', { p_branch_id: branch.id }),
+        supabase.rpc('inventory_ensure_branch_settings', { p_branch_id: branch.id }),
+      ]);
+
       const [overviewResult, itemsResult, categoriesResult, errorsResult, alertsResult] = await Promise.all([
         supabase.rpc('inventory_get_overview', { p_branch_id: branch.id }),
         supabase.rpc('inventory_list_items', {
@@ -170,16 +177,13 @@ export default function InventoryPage() {
       ]);
       if (overviewResult.error) throw overviewResult.error;
       if (itemsResult.error) throw itemsResult.error;
-      if (categoriesResult.error) throw categoriesResult.error;
-      if (errorsResult.error) throw errorsResult.error;
-      if (alertsResult.error) throw alertsResult.error;
       setOverview({ ...emptyOverview, ...(overviewResult.data as Partial<Overview> | null) });
       setItems((itemsResult.data ?? []) as InventoryItem[]);
-      setCategories((categoriesResult.data ?? []) as Category[]);
-      setProcessingErrors((errorsResult.data ?? []) as ProcessingError[]);
-      setAlerts((alertsResult.data ?? []) as InventoryAlert[]);
+      if (categoriesResult.data) setCategories(categoriesResult.data as Category[]);
+      if (errorsResult.data) setProcessingErrors(errorsResult.data as ProcessingError[]);
+      if (alertsResult.data) setAlerts(alertsResult.data as InventoryAlert[]);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Could not load inventory.');
+      setError(extractErrorMessage(loadError, 'Could not load inventory.'));
     } finally {
       setLoading(false);
     }
@@ -236,7 +240,7 @@ export default function InventoryPage() {
       });
       await load();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Could not save the ingredient.');
+      setError(extractErrorMessage(saveError, 'Could not save the ingredient.'));
     } finally {
       setSaving(false);
     }
@@ -266,7 +270,7 @@ export default function InventoryPage() {
       setNotice(`${Number(result.data ?? 0)} new stock alert${Number(result.data ?? 0) === 1 ? '' : 's'} generated.`);
       await load();
     } catch (alertError) {
-      setError(alertError instanceof Error ? alertError.message : 'Could not generate inventory alerts.');
+      setError(extractErrorMessage(alertError, 'Could not generate inventory alerts.'));
     } finally {
       setGeneratingAlerts(false);
     }
@@ -280,7 +284,7 @@ export default function InventoryPage() {
       if (result.error) throw result.error;
       await load();
     } catch (dismissError) {
-      setError(dismissError instanceof Error ? dismissError.message : 'Could not dismiss the alert.');
+      setError(extractErrorMessage(dismissError, 'Could not dismiss the alert.'));
     }
   }
 

@@ -7,6 +7,7 @@ import { SectionHeader } from '@/components/SectionHeader';
 import { StudioShell } from '@/components/StudioShell';
 import { getCurrentRestaurantContext } from '@/lib/restaurant-context';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { extractErrorMessage } from '@/lib/inventory-errors';
 import '../inventory.css';
 
 type ConsumedItem = {
@@ -106,7 +107,7 @@ export default function InventoryReportsPage() {
       setFoodReport(food.data as FoodCostReport);
       setVarianceRows((variance.data ?? []) as VarianceRow[]);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Could not load inventory reports.');
+      setError(extractErrorMessage(loadError, 'Could not load inventory reports.'));
       setFoodReport(null);
       setVarianceRows([]);
     } finally {

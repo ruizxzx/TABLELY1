@@ -7,6 +7,7 @@ import { SectionHeader } from '@/components/SectionHeader';
 import { StudioShell } from '@/components/StudioShell';
 import { getCurrentRestaurantContext } from '@/lib/restaurant-context';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { extractErrorMessage } from '@/lib/inventory-errors';
 import '../../inventory.css';
 
 type Props = { params: Promise<{ id: string }> };
@@ -211,7 +212,7 @@ export default function InventoryItemDetailPage({ params }: Props) {
       setSupplierOptions(((supplierRows.data ?? []) as SupplierOption[]).filter((supplier) =>
         Boolean((supplier as SupplierOption & { is_active?: boolean }).is_active)));
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Could not load ingredient details.');
+      setError(extractErrorMessage(loadError, 'Could not load ingredient details.'));
       setDetails(null);
     } finally {
       setLoading(false);
@@ -255,7 +256,7 @@ export default function InventoryItemDetailPage({ params }: Props) {
           if (active) setRecipeUsage((result.data ?? []) as RecipeUsage[]);
         }
       } catch (tabError) {
-        if (active) setError(tabError instanceof Error ? tabError.message : 'Could not load this ingredient view.');
+        if (active) setError(extractErrorMessage(tabError, 'Could not load this ingredient view.'));
       } finally {
         if (active) setTabLoading(false);
       }
@@ -308,7 +309,7 @@ export default function InventoryItemDetailPage({ params }: Props) {
       setNotice('Ingredient details saved.');
       await loadItem();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Could not save ingredient details.');
+      setError(extractErrorMessage(saveError, 'Could not save ingredient details.'));
     } finally {
       setSaving(false);
     }

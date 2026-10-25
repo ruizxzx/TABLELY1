@@ -7,6 +7,7 @@ import { SectionHeader } from '@/components/SectionHeader';
 import { StudioShell } from '@/components/StudioShell';
 import { getCurrentRestaurantContext } from '@/lib/restaurant-context';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
+import { extractErrorMessage } from '@/lib/inventory-errors';
 import '../inventory.css';
 
 type PurchaseOrder = { id: string; po_number: string; status: string; supplier_id: string; supplier_name: string };
@@ -116,7 +117,7 @@ export default function InventoryReceivingPage() {
       setReceipts((grnResult.data ?? []) as Receipt[]);
       setLocations((locationResult.data ?? []) as Location[]);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : 'Could not load goods receiving.');
+      setError(extractErrorMessage(loadError, 'Could not load goods receiving.'));
     } finally {
       setLoading(false);
     }
@@ -155,7 +156,7 @@ export default function InventoryReceivingPage() {
       }])));
       if (remaining.length === 0) setNotice('This purchase order has no remaining quantities.');
     } catch (lineError) {
-      setError(lineError instanceof Error ? lineError.message : 'Could not load purchase order lines.');
+      setError(extractErrorMessage(lineError, 'Could not load purchase order lines.'));
     } finally {
       setLoadingLines(false);
     }
@@ -217,7 +218,7 @@ export default function InventoryReceivingPage() {
       setNotice('Goods receipt saved as a draft. Approve it below to add accepted stock to inventory.');
       await load();
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : 'Could not save goods receipt.');
+      setError(extractErrorMessage(createError, 'Could not save goods receipt.'));
     } finally {
       setBusy(false);
     }
@@ -234,7 +235,7 @@ export default function InventoryReceivingPage() {
       setNotice(`${receipt.grn_number} approved and received stock posted.`);
       await load();
     } catch (approveError) {
-      setError(approveError instanceof Error ? approveError.message : 'Could not approve goods receipt.');
+      setError(extractErrorMessage(approveError, 'Could not approve goods receipt.'));
     } finally {
       setBusy(false);
     }
