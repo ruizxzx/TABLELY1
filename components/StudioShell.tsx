@@ -26,6 +26,7 @@ import {
   BookOpen,
   MessageCircle,
   MoreHorizontal,
+  Bike,
 } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { getSupabaseBrowserClient } from '@/lib/supabase';
@@ -42,6 +43,7 @@ const items = [
   { href: '/menu', label: 'Menu', Icon: UtensilsCrossed, roles: ['OWNER', 'MANAGER'] },
   { href: '/inventory', label: 'Inventory', Icon: Package, roles: ['OWNER', 'MANAGER'] },
   { href: '/kitchen', label: 'Kitchen', Icon: ChefHat, roles: ['OWNER', 'MANAGER', 'KITCHEN'] },
+  { href: '/delivery', label: 'Delivery', Icon: Bike, roles: ['OWNER', 'MANAGER', 'WAITER', 'KITCHEN'] },
   { href: '/service-requests', label: 'Service', Icon: BellRing, roles: ['OWNER', 'MANAGER', 'WAITER'] },
   { href: '/customer-messages', label: 'Customer messages', Icon: MessageCircle, roles: ['OWNER', 'MANAGER', 'WAITER'] },
   { href: '/payments', label: 'Payments', Icon: CreditCard, roles: ['OWNER', 'MANAGER'] },
@@ -72,6 +74,7 @@ const PERMISSION_FOR_HREF: Record<string, string> = {
   '/menu': 'MENU_MANAGEMENT',
   '/bills': 'BILLING',
   '/kitchen': 'KITCHEN_ACCESS',
+  '/delivery': 'VIEW_DELIVERY',
   '/dashboard/subscription': 'SUBSCRIPTION_MANAGEMENT',
   '/settings': 'SETTINGS',
 };
@@ -79,6 +82,7 @@ const PERMISSION_FOR_HREF: Record<string, string> = {
 const PERMISSION_FOR_PATH_PREFIX: Array<{ prefix: string; permission: string }> = [
   { prefix: '/settings/charges', permission: 'CHARGES' },
   { prefix: '/settings/payments', permission: 'PAYMENTS' },
+  { prefix: '/settings/online-ordering', permission: 'MANAGE_ONLINE_ORDERING' },
   { prefix: '/dashboard/subscription', permission: 'SUBSCRIPTION_MANAGEMENT' },
 ];
 

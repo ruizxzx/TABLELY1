@@ -544,3 +544,281 @@ export function clearCart(tableCode: string) {
 export function formatMoney(value: number) {
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(value);
 }
+
+// ===========================================================================
+// BUILD 35 — ONLINE ORDERING & FULFILLMENT CLIENT HELPERS
+// ===========================================================================
+
+export type PublicStorefrontContext = {
+  restaurant_id: string;
+  restaurant_name: string;
+  restaurant_slug: string;
+  logo_url: string | null;
+  cover_url: string | null;
+  branch_id: string;
+  branch_name: string;
+  branch_address: string | null;
+  branch_phone: string | null;
+  online_ordering_enabled: boolean;
+  pickup_enabled: boolean;
+  delivery_enabled: boolean;
+  default_prep_minutes: number;
+  minimum_order_amount: number;
+  pickup_packaging_fee: number;
+  delivery_packaging_fee: number;
+  pickup_settings: {
+    instructions?: string;
+    slot_interval_minutes?: number;
+    max_orders_per_slot?: number;
+  };
+  delivery_settings: {
+    instructions?: string;
+    cod_enabled?: boolean;
+    upi_on_delivery_enabled?: boolean;
+    free_delivery_threshold?: number | null;
+  };
+  branches: Array<{ id: string; name: string; address: string | null; phone: string | null }>;
+  delivery_zones: Array<{
+    id: string;
+    name: string;
+    pin_codes: string[];
+    delivery_fee: number;
+    minimum_order_amount: number;
+    free_delivery_threshold: number | null;
+    estimated_min_minutes: number;
+    estimated_max_minutes: number;
+  }>;
+};
+
+export type PublicFulfillmentCheckoutPreview = {
+  subtotal: number;
+  discount: number;
+  discounted_subtotal: number;
+  tax: number;
+  additional_charges: number;
+  packaging_fee: number;
+  delivery_fee: number;
+  total: number;
+  charge_breakdown: PublicCheckoutCharge[] | null;
+  coupon_id: string | null;
+  coupon_code: string | null;
+  discount_type: string | null;
+  discount_value: number | null;
+  delivery_zone_id: string | null;
+  delivery_zone_name: string | null;
+  estimated_min_minutes: number;
+  estimated_max_minutes: number;
+  is_serviceable: boolean;
+  serviceability_message: string;
+};
+
+export async function getPublicStorefrontContext(restaurantSlug: string, branchId?: string) {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const { data, error } = await supabase.rpc('get_public_storefront_context', {
+    p_restaurant_slug: restaurantSlug,
+    p_branch_id: branchId || null,
+  });
+  if (error) throw new Error(error.message);
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) throw new Error('Restaurant or branch not available for online ordering.');
+  return row as PublicStorefrontContext;
+}
+
+export async function getPublicMenuForBranch(branchId: string) {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const { data, error } = await supabase.rpc('get_public_menu_for_branch', {
+    p_branch_id: branchId,
+  });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as PublicMenuItem[];
+}
+
+export async function previewPublicFulfillmentCheckout(args: {
+  branchId: string;
+  fulfillmentType: 'PICKUP' | 'DELIVERY';
+  items: CartItem[];
+  deliveryPinCode?: string;
+  couponCode?: string | null;
+  customerPhone?: string;
+}) {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const payload = args.items.map((item) => ({
+    menu_item_id: item.menuItemId,
+    quantity: item.quantity,
+    note: item.note ?? '',
+    addons: item.addons ?? [],
+    variant_id: item.variant?.id ?? null,
+    modifier_ids: (item.modifiers ?? []).map((m) => m.id),
+  }));
+  const { data, error } = await supabase.rpc('preview_public_fulfillment_checkout', {
+    p_branch_id: args.branchId,
+    p_fulfillment_type: args.fulfillmentType,
+    p_items: payload,
+    p_delivery_pin_code: args.deliveryPinCode || null,
+    p_coupon_code: args.couponCode || null,
+    p_customer_phone: args.customerPhone || null,
+  });
+  if (error) throw new Error(error.message);
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) throw new Error('Could not calculate fulfillment checkout.');
+  return row as PublicFulfillmentCheckoutPreview;
+}
+
+export async function createPublicFulfillmentOrder(args: {
+  branchId: string;
+  fulfillmentType: 'PICKUP' | 'DELIVERY';
+  items: CartItem[];
+  paymentMethod: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail?: string;
+  customerAddress?: {
+    house?: string;
+    street?: string;
+    landmark?: string;
+    area?: string;
+    pin_code?: string;
+  };
+  deliveryPinCode?: string;
+  deliveryInstructions?: string;
+  scheduledFor?: string | null;
+  couponCode?: string | null;
+  customerNote?: string;
+  idempotencyKey?: string;
+}) {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const payload = args.items.map((item) => ({
+    menu_item_id: item.menuItemId,
+    quantity: item.quantity,
+    note: item.note ?? '',
+    addons: item.addons ?? [],
+    variant_id: item.variant?.id ?? null,
+    modifier_ids: (item.modifiers ?? []).map((m) => m.id),
+  }));
+  const { data, error } = await supabase.rpc('create_public_fulfillment_order', {
+    p_branch_id: args.branchId,
+    p_fulfillment_type: args.fulfillmentType,
+    p_items: payload,
+    p_payment_method: args.paymentMethod,
+    p_customer_name: args.customerName,
+    p_customer_phone: args.customerPhone,
+    p_customer_email: args.customerEmail || null,
+    p_customer_address: args.customerAddress || null,
+    p_delivery_pin_code: args.deliveryPinCode || null,
+    p_delivery_instructions: args.deliveryInstructions || null,
+    p_scheduled_for: args.scheduledFor || null,
+    p_coupon_code: args.couponCode || null,
+    p_customer_note: args.customerNote || null,
+    p_idempotency_key: args.idempotencyKey || null,
+  });
+  if (error) throw new Error(error.message);
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) throw new Error('The order could not be created.');
+  return row as {
+    order_id: string;
+    order_number: number;
+    tracking_token: string;
+    fulfillment_type: string;
+    fulfillment_status: string;
+    subtotal: number;
+    tax: number;
+    additional_charges: number;
+    packaging_fee: number;
+    delivery_fee: number;
+    discount: number;
+    total: number;
+    charge_breakdown: PublicCheckoutCharge[] | null;
+    payment_status: string;
+    status: string;
+    pickup_code: string | null;
+    delivery_otp: string | null;
+  };
+}
+
+export type PublicFulfillmentOrderTracking = {
+  order_id: string;
+  order_number: number;
+  restaurant_name: string;
+  branch_name: string;
+  branch_address: string | null;
+  branch_phone: string | null;
+  fulfillment_type: 'PICKUP' | 'DELIVERY';
+  fulfillment_status: string;
+  status: string;
+  payment_status: string;
+  payment_method: string | null;
+  subtotal: number;
+  tax: number;
+  additional_charges: number;
+  discount: number;
+  total: number;
+  charge_breakdown: PublicCheckoutCharge[] | null;
+  created_at: string;
+  scheduled_for: string | null;
+  promised_ready_at: string | null;
+  promised_delivery_at: string | null;
+  pickup_code: string | null;
+  delivery_otp: string | null;
+  delivery_address: {
+    house?: string;
+    street?: string;
+    landmark?: string;
+    area?: string;
+    pin_code?: string;
+  } | null;
+  delivery_instructions: string | null;
+  rejection_reason: string | null;
+  items: Array<{
+    id: string;
+    name: string;
+    quantity: number;
+    unit_price: number;
+    line_total: number;
+    selected_addons?: Array<{ name: string; price: number }>;
+    selected_options?: Array<{ type: string; name: string; price_delta?: number }>;
+    special_instructions?: string | null;
+  }>;
+};
+
+export async function getPublicFulfillmentOrder(trackingToken: string) {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const { data, error } = await supabase.rpc('get_public_fulfillment_order', {
+    p_tracking_token: trackingToken,
+  });
+  if (error) throw new Error(error.message);
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) throw new Error('Order not found.');
+  return row as PublicFulfillmentOrderTracking;
+}
+
+export function fulfillmentCartKey(branchId: string) {
+  const contextId = getCustomerVisitContextId() ?? 'ssr';
+  return `tablely:fulfillment:cart:${branchId}:${contextId}`;
+}
+
+export function saveFulfillmentCart(branchId: string, items: CartItem[]) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(fulfillmentCartKey(branchId), JSON.stringify(items));
+  window.dispatchEvent(new Event('tablely-fulfillment-cart-change'));
+}
+
+export function readFulfillmentCart(branchId: string): CartItem[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(fulfillmentCartKey(branchId)) ?? '[]');
+    return Array.isArray(parsed) ? (parsed as CartItem[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function clearFulfillmentCart(branchId: string) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(fulfillmentCartKey(branchId));
+  window.dispatchEvent(new Event('tablely-fulfillment-cart-change'));
+}

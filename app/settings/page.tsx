@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { CreditCard, ReceiptText, LogOut, ShieldCheck, Palette, Globe2, Shield, BadgeCheck, Bell, Tag, MessageSquare, AlertTriangle } from 'lucide-react';
+import { CreditCard, ReceiptText, LogOut, ShieldCheck, Palette, Globe2, Shield, BadgeCheck, Bell, Tag, MessageSquare, AlertTriangle, Bike } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { StudioShell } from '@/components/StudioShell';
@@ -49,6 +49,7 @@ export default function SettingsPage(){
  return <StudioShell><SectionHeader eyebrow="SETTINGS" title="Settings" description="Restaurant configuration, payments and your account."/><div className="settings-grid">
    {canOnlinePayments?<Link className="surface-card settings-tile" href="/settings/payments"><CreditCard size={20}/><div><strong>Online payments</strong><span>Configure branch-specific Razorpay payments and safe fallback defaults.</span></div></Link>:null}
    {can('CHARGES')?<Link className="surface-card settings-tile" href="/settings/charges"><ReceiptText size={20}/><div><strong>Checkout charges</strong><span>Configure branch-specific GST, platform and other customer charges.</span></div></Link>:null}
+   {owner || can('MANAGE_ONLINE_ORDERING')?<Link className="surface-card settings-tile" href="/settings/online-ordering"><Bike size={20}/><div><strong>Online Ordering & Fulfillment</strong><span>Pickup, delivery zones, packaging charges, order limits and schedule settings.</span></div></Link>:null}
    {can('DISCOUNTS_COUPONS')?<Link className="surface-card settings-tile" href="/settings/coupons"><Tag size={20}/><div><strong>Coupons & offers</strong><span>{owner?'Create discounts, limits, scopes and customer-facing promotions.':'Manage discounts and offers for your branch.'}</span></div></Link>:null}
    <Link className="surface-card settings-tile" href="/settings/branding"><Palette size={20}/><div><strong>Branding studio</strong><span>Restaurant logo, colors and customer-facing menu theme.</span></div></Link>
    <button className="surface-card settings-tile settings-tile-button" type="button" onClick={()=>setFeedbackOpen(true)}><MessageSquare size={20}/><div><strong>Report a problem / suggest an idea</strong><span>Send feedback directly to the Tablely admin team.</span></div></button>
