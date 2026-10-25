@@ -17,6 +17,18 @@ type WastageItem = {
   available_qty: number;
 };
 
+type StorageLocation = {
+  id: string;
+  name: string;
+};
+
+type ItemBatch = {
+  id: string;
+  batch_number: string | null;
+  current_qty: number;
+  expires_at: string | null;
+};
+
 type WastageRecord = {
   id: string;
   item_id: string;
@@ -43,8 +55,12 @@ export default function InventoryWastagePage() {
   const [canRecord, setCanRecord] = useState(false);
   const [canViewCost, setCanViewCost] = useState(false);
   const [items, setItems] = useState<WastageItem[]>([]);
+  const [locations, setLocations] = useState<StorageLocation[]>([]);
+  const [batches, setBatches] = useState<ItemBatch[]>([]);
   const [records, setRecords] = useState<WastageRecord[]>([]);
   const [itemId, setItemId] = useState('');
+  const [locationId, setLocationId] = useState('');
+  const [batchId, setBatchId] = useState('');
   const [qty, setQty] = useState('');
   const [reason, setReason] = useState(reasons[0]);
   const [notes, setNotes] = useState('');
@@ -83,7 +99,7 @@ export default function InventoryWastagePage() {
       setCanRecord(Boolean(wastagePermission.data));
       setCanViewCost(Boolean(costPermission.data));
 
-      const [itemRows, wastageRows] = await Promise.all([
+      const [itemRows, wastageRows, locationRows] = await Promise.all([
         wastagePermission.data
           ? supabase.rpc('inventory_list_wastage_items', { p_branch_id: branch.id })
           : Promise.resolve({ data: [], error: null }),
@@ -94,11 +110,13 @@ export default function InventoryWastagePage() {
             p_offset: 0,
           })
           : Promise.resolve({ data: [], error: null }),
+        supabase.from('inventory_locations').select('id,name').eq('branch_id', branch.id).eq('is_active', true).order('sort_order'),
       ]);
       if (itemRows.error) throw itemRows.error;
       if (wastageRows.error) throw wastageRows.error;
       const nextItems = (itemRows.data ?? []) as WastageItem[];
       setItems(nextItems);
+      setLocations((locationRows.data ?? []) as StorageLocation[]);
       setRecords((wastageRows.data ?? []) as WastageRecord[]);
       setItemId((current) => nextItems.some((item) => item.id === current) ? current : nextItems[0]?.id ?? '');
     } catch (loadError) {
@@ -109,6 +127,26 @@ export default function InventoryWastagePage() {
   }, [supabase]);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    if (!supabase || !branchId || !itemId) {
+      setBatches([]);
+      setBatchId('');
+      return;
+    }
+    void (async () => {
+      const { data } = await supabase
+        .from('inventory_batches')
+        .select('id,batch_number,current_qty,expires_at')
+        .eq('branch_id', branchId)
+        .eq('item_id', itemId)
+        .eq('is_active', true)
+        .gt('current_qty', 0)
+        .order('expires_at', { ascending: true, nullsFirst: false });
+      setBatches((data ?? []) as ItemBatch[]);
+      setBatchId('');
+    })();
+  }, [supabase, branchId, itemId]);
 
   const selectedItem = items.find((item) => item.id === itemId);
   const parsedQty = Number(qty);
@@ -151,6 +189,8 @@ export default function InventoryWastagePage() {
         p_qty: parsedQty,
         p_unit: selectedItem.base_unit,
         p_reason: reason,
+        p_batch_id: batchId || null,
+        p_location_id: locationId || null,
         p_notes: notes.trim() || null,
         p_wastage_date: wastageDate,
       });
@@ -201,6 +241,22 @@ export default function InventoryWastagePage() {
             <label>Quantity
               <input type="number" min="0.0001" step="0.0001" max={selectedItem?.available_qty ?? undefined} value={qty} onChange={(event) => setQty(event.target.value)} required />
               {selectedItem && <small>Available: {selectedItem.available_qty} {selectedItem.base_unit}</small>}
+            </label>
+            <label>Storage Location <span className="inventory-optional">OPTIONAL</span>
+              <select value={locationId} onChange={(event) => setLocationId(event.target.value)}>
+                <option value="">Default storeroom</option>
+                {locations.map((loc) => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
+              </select>
+            </label>
+            <label>Specific Batch <span className="inventory-optional">OPTIONAL (FEFO DEFAULT)</span>
+              <select value={batchId} onChange={(event) => setBatchId(event.target.value)}>
+                <option value="">Auto-allocate (FEFO)</option>
+                {batches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {(b.batch_number || 'Batch') + ' · ' + b.current_qty + ' ' + (selectedItem?.base_unit || '') + (b.expires_at ? ' · Exp: ' + b.expires_at : '')}
+                  </option>
+                ))}
+              </select>
             </label>
             <label>Reason
               <select value={reason} onChange={(event) => setReason(event.target.value)}>

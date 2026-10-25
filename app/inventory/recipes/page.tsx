@@ -66,6 +66,13 @@ type CostBreakdown = {
   error?: string;
 };
 
+type RecipeCoverage = {
+  total_active_menu_items: number;
+  menu_items_with_recipes: number;
+  coverage_percentage: number;
+  unmapped_menu_items: Array<{ id: string; name: string }>;
+};
+
 const formatInr = (paise: number | null | undefined) =>
   paise == null ? '—' : `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -92,6 +99,8 @@ export default function InventoryRecipesPage() {
   const [error, setError] = useState<string | null>(null);
   const [costs, setCosts] = useState<Record<string, CostBreakdown>>({});
   const [costLoading, setCostLoading] = useState<string | null>(null);
+  const [coverage, setCoverage] = useState<RecipeCoverage | null>(null);
+  const [showUnmapped, setShowUnmapped] = useState(false);
   const [form, setForm] = useState({
     name: '',
     description: '',
@@ -117,7 +126,7 @@ export default function InventoryRecipesPage() {
       setOrganizationId(context.data.organization.id);
       setBranchName(branch.name);
 
-      const [view, manage, cost, recipeResult, itemResult, menuResult] = await Promise.all([
+      const [view, manage, cost, recipeResult, itemResult, menuResult, coverageResult] = await Promise.all([
         supabase.rpc('current_user_has_permission_for_branch', {
           p_branch_id: branch.id,
           p_permission: 'INVENTORY_VIEW',
@@ -147,6 +156,7 @@ export default function InventoryRecipesPage() {
           .eq('branch_id', branch.id)
           .eq('is_draft', false)
           .order('name'),
+        supabase.rpc('inventory_get_recipe_coverage', { p_branch_id: branch.id }).then((r) => r, () => ({ data: null, error: null })),
       ]);
       if (view.error) throw view.error;
       if (manage.error) throw manage.error;
@@ -164,6 +174,16 @@ export default function InventoryRecipesPage() {
         base_unit: String(item.base_unit),
       })));
       setMenuItems((menuResult.data ?? []) as MenuItem[]);
+      const covData = Array.isArray(coverageResult?.data) ? coverageResult.data[0] : (coverageResult?.data as unknown);
+      if (covData && typeof covData === 'object') {
+        const cd = covData as Record<string, unknown>;
+        setCoverage({
+          total_active_menu_items: Number(cd.total_active_menu_items ?? 0),
+          menu_items_with_recipes: Number(cd.menu_items_with_recipes ?? 0),
+          coverage_percentage: Number(cd.coverage_percentage ?? 0),
+          unmapped_menu_items: Array.isArray(cd.unmapped_menu_items) ? (cd.unmapped_menu_items as Array<{ id: string; name: string }>) : [],
+        });
+      }
     } catch (loadError) {
       setError(extractErrorMessage(loadError, 'Could not load recipes.'));
     } finally {
@@ -378,6 +398,40 @@ export default function InventoryRecipesPage() {
         />
 
         {error && <div className="inventory-error" role="alert">{error}</div>}
+
+        {coverage && (
+          <section className="inventory-card">
+            <div className="inventory-list-heading">
+              <div>
+                <span className="inventory-kicker">RECIPE COVERAGE</span>
+                <h2>
+                  {coverage.coverage_percentage}% menu coverage · {coverage.menu_items_with_recipes} of {coverage.total_active_menu_items} active dishes mapped
+                </h2>
+              </div>
+              {coverage.unmapped_menu_items.length > 0 && (
+                <button
+                  type="button"
+                  className="button button-light"
+                  onClick={() => setShowUnmapped((prev) => !prev)}
+                >
+                  {showUnmapped ? 'Hide unmapped dishes' : `Show ${coverage.unmapped_menu_items.length} unmapped dishes`}
+                </button>
+              )}
+            </div>
+            {showUnmapped && coverage.unmapped_menu_items.length > 0 && (
+              <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {coverage.unmapped_menu_items.map((item) => (
+                  <span
+                    key={item.id}
+                    style={{ padding: '4px 10px', fontSize: 13, background: '#f1f5f9', borderRadius: 6, color: '#334155' }}
+                  >
+                    {item.name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         {showCreate && canManage && (
           <section className="inventory-create">

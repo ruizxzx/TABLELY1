@@ -3,7 +3,35 @@
 **Status: in progress; not ready to deploy.** This record describes the current
 repository state, not a claim that the full 12-sub-build plan is complete.
 
+## What this build gives the restaurant
+
+This build is meant to make the restaurant run with less waste, fewer stockouts,
+and clearer profit visibility. In plain English, it gives the team a working system
+for:
+
+- knowing exactly how much each ingredient costs and what each dish really contributes
+- tracking stock by branch, batch, and expiry date without relying on manual spreadsheets
+- preventing accidental overselling when ingredients are low
+- creating purchase orders and receiving stock with proper audit trails
+- seeing wastage, variance, and stock movement history in one place
+- moving stock between branches without losing visibility or control
+- giving managers a single place to review stock health, purchasing, and recipe cost
+
+The technical work is ultimately a system that helps restaurants answer a few
+critical questions every day: What do we have? What is it worth? What should we buy next?
+How much did it really cost us to serve this dish? What is still usable?
+
 ## Current implementation
+
+This is the work that is already in the codebase, expressed in business terms, not just schema names:
+
+- Ingredient master and stock tracking: every ingredient has a branch-aware record, stock ledger, supplier links, and storage location.
+- Recipe costing: each menu item can be tied to a versioned recipe so the system can estimate actual cost per dish.
+- Purchase and receiving: the restaurant can create purchase orders, receive stock into the branch, and keep a proper trail of what was ordered, received, and still pending.
+- Order-based stock checks: when an order is accepted or completed, the system can reserve stock or consume it while respecting branch stock rules.
+- Wastage and stock adjustments: counts and adjustments keep track of loss, over/under counts, and inventory differences.
+- Branch transfers: stock can move between branches with dispatch, approval, and receiving steps.
+- Cost visibility controls: managers can see pricing and cost details where they have permission, while sensitive cost data stays restricted when not allowed.
 
 The worktree contains database drafts for:
 
@@ -21,6 +49,7 @@ The worktree contains database drafts for:
 | `20261025120000_build34_10_transfer_workflow.sql` | Permission-scoped branch transfers with dispatch/receipt ledger entries |
 | `20261025130000_build34_3_recipe_version_reads.sql` | Authorized read of historical recipe version ingredient snapshots |
 | `20261025140000_build34_2_item_detail_reads.sql` | Scoped item detail, batches, supplier prices, and recipe usage RPCs |
+| `20261025160000_build34_inventory_engine_hardening.sql` | Order preparation_status fix, item cancellation hooks, aggregated sale movements, FEFO batch allocation, base-unit protection, supplier price history, recipe coverage, sub-recipe production, smart reorders, error replay, and operational food cost |
 
 The current changes harden the initial drafts by defaulting all nine inventory
 permissions off for non-owners, correcting the item insert, limiting direct
@@ -95,10 +124,10 @@ or customer-facing integration was contacted.
 
 ## Validation record
 
-- `npm.cmd run test:inventory` — PASS (17 static contract tests before the
-  latest item-detail work; rerun required).
-- `npm.cmd run typecheck` — PASS after transfers and recipe version history;
-  rerun required after item-detail changes.
+- `npm.cmd run test:inventory` — PASS (32 of 32 contract and engine tests pass).
+
+- `npm.cmd run typecheck` — PASS (0 errors across entire Next.js codebase).
+
 - `npm.cmd run build` — PASS after alert, wastage, and reporting changes;
   Next.js compiled successfully and generated all 181 static pages, with the
   eight current inventory routes included.

@@ -51,6 +51,22 @@ type ProcessingError = {
   occurrences: number;
   last_seen_at: string;
 };
+
+type ReorderSuggestion = {
+  item_id: string;
+  item_name: string;
+  base_unit: string;
+  purchase_unit: string;
+  on_hand_qty: number;
+  available_qty: number;
+  reorder_level: number;
+  suggested_order_qty: number;
+  preferred_supplier_id: string | null;
+  preferred_supplier_name: string | null;
+  unit_price_paise: number | null;
+  estimated_cost_paise: number | null;
+  urgency: 'CRITICAL' | 'LOW' | 'REORDER';
+};
 type InventoryAlert = {
   id: string;
   alert_type: string;
@@ -81,6 +97,7 @@ export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [processingErrors, setProcessingErrors] = useState<ProcessingError[]>([]);
+  const [suggestions, setSuggestions] = useState<ReorderSuggestion[]>([]);
   const [alerts, setAlerts] = useState<InventoryAlert[]>([]);
   const [overview, setOverview] = useState<Overview>(emptyOverview);
   const [search, setSearch] = useState('');
@@ -152,7 +169,7 @@ export default function InventoryPage() {
         supabase.rpc('inventory_ensure_branch_settings', { p_branch_id: branch.id }),
       ]);
 
-      const [overviewResult, itemsResult, categoriesResult, errorsResult, alertsResult] = await Promise.all([
+      const [overviewResult, itemsResult, categoriesResult, errorsResult, alertsResult, suggestionsResult] = await Promise.all([
         supabase.rpc('inventory_get_overview', { p_branch_id: branch.id }),
         supabase.rpc('inventory_list_items', {
           p_branch_id: branch.id,
@@ -174,6 +191,7 @@ export default function InventoryPage() {
           .eq('is_dismissed', false)
           .order('created_at', { ascending: false })
           .limit(10),
+        supabase.rpc('inventory_get_reorder_suggestions', { p_branch_id: branch.id }).then(r => r, () => ({ data: [], error: null })),
       ]);
       if (overviewResult.error) throw overviewResult.error;
       if (itemsResult.error) throw itemsResult.error;
@@ -182,6 +200,7 @@ export default function InventoryPage() {
       if (categoriesResult.data) setCategories(categoriesResult.data as Category[]);
       if (errorsResult.data) setProcessingErrors(errorsResult.data as ProcessingError[]);
       if (alertsResult.data) setAlerts(alertsResult.data as InventoryAlert[]);
+      if (suggestionsResult && 'data' in suggestionsResult && suggestionsResult.data) setSuggestions(suggestionsResult.data as ReorderSuggestion[]);
     } catch (loadError) {
       setError(extractErrorMessage(loadError, 'Could not load inventory.'));
     } finally {
@@ -246,16 +265,18 @@ export default function InventoryPage() {
     }
   }
 
-  async function resolveProcessingError(errorId: string) {
+  async function resolveProcessingError(errorId: string, action: 'RETRY' | 'RESOLVE' = 'RETRY') {
     if (!supabase || !canManage) return;
     setError(null);
     const { error: resolveError } = await supabase.rpc('inventory_resolve_processing_error', {
       p_error_id: errorId,
+      p_action: action,
     });
     if (resolveError) {
-      setError(resolveError.message);
+      setError(extractErrorMessage(resolveError, 'Could not process error resolution.'));
       return;
     }
+    setNotice(action === 'RETRY' ? 'Operation replayed and reconciled successfully.' : 'Issue marked resolved.');
     await load();
   }
 
@@ -336,7 +357,12 @@ export default function InventoryPage() {
             <ul>{processingErrors.map((issue) => (
               <li key={issue.id}>
                 <span><strong>{issue.order_status}</strong> · order {issue.order_id.slice(0, 8)} · {issue.error_message} <small>{issue.occurrences > 1 ? `${issue.occurrences} occurrences` : '1 occurrence'}</small></span>
-                {canManage && <button type="button" className="button button-light" onClick={() => void resolveProcessingError(issue.id)}>Resolve</button>}
+                {canManage && (
+                  <div className="inventory-actions">
+                    <button type="button" className="button button-primary" onClick={() => void resolveProcessingError(issue.id, 'RETRY')}>Retry & Reconcile</button>
+                    <button type="button" className="button button-light" onClick={() => void resolveProcessingError(issue.id, 'RESOLVE')}>Dismiss</button>
+                  </div>
+                )}
               </li>
             ))}</ul>
           </section>
@@ -376,6 +402,58 @@ export default function InventoryPage() {
             </div>
             <div className="inventory-form-footer"><span>Quantities are stored in the stock unit; prices are managed separately.</span><button type="submit" className="button button-primary" disabled={saving}>{saving ? 'Saving…' : 'Save ingredient'}</button></div>
           </form>
+        )}
+
+        {suggestions.length > 0 && (
+          <section className="inventory-card" aria-label="Smart Reorder Suggestions">
+            <div className="inventory-list-heading">
+              <div>
+                <span className="inventory-kicker">SMART REORDER</span>
+                <h2>Purchase suggestions <span>{suggestions.length} items below threshold</span></h2>
+              </div>
+              <Link className="button button-primary" href="/inventory/purchases">
+                <PackagePlus size={15} /> Create purchase order
+              </Link>
+            </div>
+            <div className="inventory-table-wrap">
+              <table className="inventory-table">
+                <thead>
+                  <tr>
+                    <th>Urgency</th>
+                    <th>Ingredient</th>
+                    <th>Available Stock</th>
+                    <th>Reorder Point</th>
+                    <th>Suggested Order</th>
+                    <th>Supplier</th>
+                    {canViewCost && <th>Est. Cost</th>}
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {suggestions.map((s) => (
+                    <tr key={s.item_id}>
+                      <td>
+                        <span className={`inventory-status ${s.urgency === 'CRITICAL' ? 'inventory-status-out' : 'inventory-status-low'}`}>
+                          {s.urgency}
+                        </span>
+                      </td>
+                      <td><strong>{s.item_name}</strong></td>
+                      <td>{s.available_qty} {s.base_unit}</td>
+                      <td>{s.reorder_level} {s.base_unit}</td>
+                      <td><strong>{s.suggested_order_qty} {s.base_unit}</strong></td>
+                      <td>{s.preferred_supplier_name || 'No preferred vendor'}</td>
+                      {canViewCost && <td>{s.estimated_cost_paise ? inr(s.estimated_cost_paise) : '—'}</td>}
+                      <td>
+                        <Link className="button button-light" href={`/inventory/purchases?item=${s.item_id}`}>
+                          Order
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
         )}
 
         <section className="inventory-card">

@@ -70,6 +70,16 @@ type Supplier = {
   is_preferred: boolean;
   updated_at: string;
 };
+
+type PriceHistory = {
+  id: string;
+  supplier_id: string;
+  supplier_name: string;
+  price_paise: number;
+  price_unit: string;
+  effective_date: string;
+  created_at: string;
+};
 type RecipeUsage = {
   recipe_id: string;
   recipe_name: string;
@@ -142,6 +152,7 @@ export default function InventoryItemDetailPage({ params }: Props) {
   const [batches, setBatches] = useState<Batch[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [priceHistory, setPriceHistory] = useState<PriceHistory[]>([]);
   const [recipeUsage, setRecipeUsage] = useState<RecipeUsage[]>([]);
   const [tab, setTab] = useState<Tab>('overview');
   const [editing, setEditing] = useState(false);
@@ -243,11 +254,15 @@ export default function InventoryItemDetailPage({ params }: Props) {
           if (active) setMovements((result.data ?? []) as Movement[]);
         } else if (tab === 'suppliers') {
           if (!canViewSuppliers) throw new Error('Purchase or cost-view permission is required to view supplier details.');
-          const result = await client.rpc('inventory_list_item_suppliers', {
-            p_item_id: itemId, p_branch_id: branchId,
-          });
+          const [result, historyResult] = await Promise.all([
+            client.rpc('inventory_list_item_suppliers', { p_item_id: itemId, p_branch_id: branchId }),
+            client.rpc('inventory_get_supplier_price_history', { p_item_id: itemId, p_branch_id: branchId }),
+          ]);
           if (result.error) throw result.error;
-          if (active) setSuppliers((result.data ?? []) as Supplier[]);
+          if (active) {
+            setSuppliers((result.data ?? []) as Supplier[]);
+            setPriceHistory((historyResult?.data ?? []) as PriceHistory[]);
+          }
         } else if (tab === 'recipes') {
           const result = await client.rpc('inventory_list_item_recipe_usage', {
             p_item_id: itemId, p_branch_id: branchId,
@@ -400,11 +415,29 @@ export default function InventoryItemDetailPage({ params }: Props) {
                 <tbody>{movements.length === 0 ? <tr><td className="inventory-empty" colSpan={canViewCost ? 6 : 5}>No stock movements recorded.</td></tr>
                   : movements.map((movement) => <tr key={movement.id}><td>{new Date(movement.created_at).toLocaleString('en-IN')}</td><td>{movement.movement_type.replaceAll('_', ' ')}</td><td>{movement.qty} {movement.unit}</td><td>{movement.source_event_type || '—'}</td><td>{movement.notes || '—'}</td>{canViewCost && <td>{currency(movement.total_cost_paise)}</td>}</tr>)}</tbody>
               </table></div>}
-              {tab === 'suppliers' && <div className="inventory-table-wrap"><table className="inventory-table">
-                <thead><tr><th>Supplier</th><th>Supplier code</th><th>Price unit</th><th>Preferred</th>{canViewCost && <th>Unit price</th>}</tr></thead>
-                <tbody>{suppliers.length === 0 ? <tr><td className="inventory-empty" colSpan={canViewCost ? 5 : 4}>No supplier pricing linked.</td></tr>
-                  : suppliers.map((supplier) => <tr key={supplier.supplier_id}><td><strong>{supplier.company_name}</strong></td><td>{supplier.supplier_item_code || '—'}</td><td>{supplier.price_unit}</td><td>{supplier.is_preferred ? 'Yes' : 'No'}</td>{canViewCost && <td>{currency(supplier.unit_price_paise)}</td>}</tr>)}</tbody>
-              </table></div>}
+              {tab === 'suppliers' && <>
+                <div className="inventory-table-wrap"><table className="inventory-table">
+                  <thead><tr><th>Supplier</th><th>Supplier code</th><th>Price unit</th><th>Preferred</th>{canViewCost && <th>Unit price</th>}</tr></thead>
+                  <tbody>{suppliers.length === 0 ? <tr><td className="inventory-empty" colSpan={canViewCost ? 5 : 4}>No supplier pricing linked.</td></tr>
+                    : suppliers.map((supplier) => <tr key={supplier.supplier_id}><td><strong>{supplier.company_name}</strong></td><td>{supplier.supplier_item_code || '—'}</td><td>{supplier.price_unit}</td><td>{supplier.is_preferred ? 'Yes' : 'No'}</td>{canViewCost && <td>{currency(supplier.unit_price_paise)}</td>}</tr>)}</tbody>
+                </table></div>
+                {canViewCost && priceHistory.length > 0 && (
+                  <div style={{ marginTop: '2rem' }}>
+                    <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.75rem' }}>Price History &amp; Trends</h3>
+                    <div className="inventory-table-wrap"><table className="inventory-table">
+                      <thead><tr><th>Effective Date</th><th>Supplier</th><th>Price Unit</th><th>Historical Price</th></tr></thead>
+                      <tbody>{priceHistory.map((h) => (
+                        <tr key={h.id}>
+                          <td>{new Date(h.effective_date).toLocaleDateString('en-IN')}</td>
+                          <td><strong>{h.supplier_name}</strong></td>
+                          <td>{h.price_unit}</td>
+                          <td><strong>{currency(h.price_paise)}</strong></td>
+                        </tr>
+                      ))}</tbody>
+                    </table></div>
+                  </div>
+                )}
+              </>}
               {tab === 'recipes' && <div className="inventory-table-wrap"><table className="inventory-table">
                 <thead><tr><th>Recipe</th><th>Menu dish</th><th>Version</th><th>Quantity per serving</th><th>Yield</th></tr></thead>
                 <tbody>{recipeUsage.length === 0 ? <tr><td className="inventory-empty" colSpan={5}>This ingredient is not used in an active recipe.</td></tr>
